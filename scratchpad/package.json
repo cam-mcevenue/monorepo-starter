@@ -1,0 +1,17 @@
+{
+  "name": "scratchpad",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "dependencies": {
+    "@effect/ai-anthropic": "catalog:effect",
+    "@effect/ai-openai": "catalog:effect",
+    "@effect/ai-openai-compat": "catalog:effect",
+    "@effect/ai-openrouter": "catalog:effect",
+    "@effect/ai-typesafe": "catalog:effect",
+    "@effect/opentelemetry": "catalog:effect",
+    "@effect/platform-node": "catalog:effect",
+    "@effect/sql-sqlite-node": "catalog:effect",
+    "effect": "catalog:effect"
+  }
+}

@@ -1,0 +1,70 @@
+packages:
+  - scratchpad
+
+catalogMode: prefer
+
+catalog:
+
+catalogs:
+  effect:
+    "@effect/ai-anthropic": 4.1.4
+    "@effect/ai-openai": 4.1.4
+    "@effect/ai-openai-compat": 4.1.4
+    "@effect/ai-openrouter": 4.1.4
+    "@effect/ai-typesafe": 4.1.4
+    "@effect/opentelemetry": 4.1.4
+    "@effect/platform-node": 4.1.4
+    "@effect/sql-sqlite-node": 4.1.4
+    "@effect/vitest": 4.1.4
+    effect: 4.1.4
+  infra:
+    '@alchemy.run/frontend-frameworks': 2.0.0-beta.85
+    '@alchemy.run/cloudflare': 2.0.0-beta.85
+    '@alchemy.run/doppler': 2.0.0-beta.85
+    alchemy: 2.0.0-beta.85
+  tooling:
+    "@cam-mcevenue/tsconfig": "github:cam-mcevenue/configs#path:/packages/tsconfig"
+    "@cam-mcevenue/vite-config": "github:cam-mcevenue/configs#path:/packages/vite"
+    "@effect/tsgo": 0.68.0
+    "@types/node": 26.6.6
+    typescript: 7.0.2
+    vite: npm:@voidzero-dev/vite-plus-core@1.6.0
+    vite-plus: 1.6.0
+    vitest: 5.1.0
+
+
+overrides:
+  vite@*: "catalog:tooling"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
+minimumReleaseAgeExclude:
+  - "@effect/platform-node-shared@4.1.4"
+  - "@effect/platform-node@4.1.4"
+  - "@effect/vitest@4.1.4"
+  - effect@4.1.4
+  - "@voidzero-dev/vite-plus-core@1.6.0"
+  - "@voidzero-dev/vite-plus-darwin-arm64@1.6.0"
+  - "@voidzero-dev/vite-plus-darwin-x64@1.6.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-gnu@1.6.0"
+  - "@voidzero-dev/vite-plus-linux-arm64-musl@1.6.0"
+  - "@voidzero-dev/vite-plus-linux-x64-gnu@1.6.0"
+  - "@voidzero-dev/vite-plus-linux-x64-musl@1.6.0"
+  - "@voidzero-dev/vite-plus-win32-arm64-msvc@1.6.0"
+  - "@voidzero-dev/vite-plus-win32-x64-msvc@1.6.0"
+  - vite-plus@1.6.0
+  - "@effect/tsgo-darwin-arm64@0.68.0"
+  - "@effect/tsgo-darwin-x64@0.68.0"
+  - "@effect/tsgo-linux-arm64@0.68.0"
+  - "@effect/tsgo-linux-arm@0.68.0"
+  - "@effect/tsgo-linux-x64@0.68.0"
+  - "@effect/tsgo-win32-arm64@0.68.0"
+  - "@effect/tsgo-win32-x64@0.68.0"
+  - "@effect/tsgo@0.68.0"
+
+supportedArchitectures:
+  os: [darwin, linux]
+  cpu: [arm64]
+  libc: [glibc]

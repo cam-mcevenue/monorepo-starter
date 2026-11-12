@@ -1,0 +1,32 @@
+{
+  "name": "monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "effect-tsgo vp check",
+    "lint": "effect-tsgo vp lint",
+    "format": "vp fmt",
+    "format:check": "vp fmt --check",
+    "test": "vp test"
+  },
+  "devDependencies": {
+    "@cam-mcevenue/tsconfig": "catalog:tooling",
+    "@cam-mcevenue/vite-config": "catalog:tooling",
+    "@effect/tsgo": "catalog:tooling",
+    "@types/node": "catalog:tooling",
+    "typescript": "catalog:tooling",
+    "vite": "catalog:tooling",
+    "vite-plus": "catalog:tooling"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.18.0",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=26"
+  }
+}
