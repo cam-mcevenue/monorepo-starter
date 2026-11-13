@@ -1,6 +1,7 @@
 import { Console, Effect, Option } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/cli";
 import {
+  checkRemovable,
   createPackage,
   findRepoRoot,
   listRemovablePackages,
@@ -209,11 +210,12 @@ const rm = Command.make(
             "No removable packages found in packages/",
           );
 
-      const packagePath = `packages/${chosenName}`;
+      // Refuse before asking, so a "yes" is never followed by a refusal.
+      const { packageName: target, packagePath } = yield* checkRemovable(root, chosenName);
       if (!yes) {
         const confirmed = yield* Prompt.run(
           Prompt.Confirm({
-            message: `Delete ${packagePath}?`,
+            message: `Delete ${target} (${packagePath})?`,
             initial: false,
           }),
         );
@@ -224,7 +226,7 @@ const rm = Command.make(
 
       const { packageName, written, wasPublic } = yield* removePackage(root, chosenName);
       yield* formatFiles(root, written);
-      yield* Console.log(`Removed ${packageName} and ${packagePath}`);
+      yield* Console.log(`Removed ${packageName} (${packagePath})`);
       if (wasPublic) {
         yield* Console.log("Any release already on npm is untouched; deprecate it there if needed");
       }

@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { createPackage, removePackage } from "@repo/cli/internal/scaffold";
+import { checkRemovable, createPackage, removePackage } from "@repo/cli/internal/scaffold";
 import { loadWorkspace, makePublic, syncWorkspace } from "@repo/cli/internal/workspace";
 
 /**
@@ -174,6 +174,9 @@ describe("removePackage", () => {
           peerDependencies: { "@acme/foo": "workspace:*" },
         },
       });
+
+      const checked = yield* Effect.flip(run(checkRemovable(repo.root, "foo")));
+      expect(checked.message).toContain("packages/app/package.json (devDependencies)");
 
       const refused = yield* Effect.flip(run(removePackage(repo.root, "foo")));
       expect(refused.message).toContain("packages/app/package.json (devDependencies)");

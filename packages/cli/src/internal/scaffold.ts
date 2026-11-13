@@ -266,14 +266,18 @@ export const createPackage = (
   });
 
 /**
- * The reverse of `createPackage`: delete the directory, refusing while any
- * workspace member still depends on it. Nothing here prompts — the CLI owns
- * confirmation.
+ * Everything `pkg rm` refuses on, checked without deleting anything, so the CLI
+ * can refuse before it asks for confirmation: an invalid or protected name, a
+ * missing directory, or a workspace member that still depends on the package.
  */
-export const removePackage = (
+export const checkRemovable = (
   root: string,
   name: string,
-): Effect.Effect<RemovePackageResult, ScaffoldError | WorkspaceError, Services> =>
+): Effect.Effect<
+  { readonly packageName: string; readonly packagePath: string; readonly wasPublic: boolean },
+  ScaffoldError | WorkspaceError,
+  Services
+> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -307,12 +311,28 @@ export const removePackage = (
       });
     }
 
+    const wasPublic = !/"private"\s*:\s*true/.test(manifest);
+    return { packageName, packagePath, wasPublic };
+  });
+
+/**
+ * The reverse of `createPackage`: delete the directory once `checkRemovable`
+ * passes, then sync. Nothing here prompts — the CLI owns confirmation.
+ */
+export const removePackage = (
+  root: string,
+  name: string,
+): Effect.Effect<RemovePackageResult, ScaffoldError | WorkspaceError, Services> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const { packageName, packagePath, wasPublic } = yield* checkRemovable(root, name);
+
     yield* orFail(
-      fs.remove(target, { recursive: true, force: true }),
+      fs.remove(path.join(root, packagePath), { recursive: true, force: true }),
       `Failed to remove ${packagePath}`,
     );
 
     const { written } = yield* syncWorkspace(root, { check: false });
-    const wasPublic = !/"private"\s*:\s*true/.test(manifest);
     return { packageName, packagePath, written, wasPublic };
   });
