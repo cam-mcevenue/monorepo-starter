@@ -13,7 +13,8 @@ vp install
 ```
 
 `--public` makes the new package publishable; [`registration.md`](./registration.md) covers
-what that adds.
+what that adds. It checks for the npm scope before copying anything, so a failed
+`pkg add --public` leaves no directory behind.
 
 `pkg add` does four things a hand-built package misses:
 
@@ -27,8 +28,8 @@ what that adds.
 
 `pkg rm` deletes the directory, behind a confirmation prompt that defaults to no. It refuses
 while any workspace member lists the package in `dependencies`, `peerDependencies` or
-`devDependencies`, and names each one to edit first. Removing a public package leaves any
-release on npm untouched.
+`devDependencies`, and names each one to edit first. Every refusal comes before the prompt.
+Removing a public package leaves any release on npm untouched.
 
 A template copied by hand keeps `../../../../tsconfig.base.json`, which from `packages/<name>`
 points above the repo, and `vpr check` fails with `typescript(tsconfig-error)`.

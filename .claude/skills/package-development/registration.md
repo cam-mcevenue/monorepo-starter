@@ -44,7 +44,9 @@ vp install                          # relink the renamed package
 
 Both need `"repo": { "npmScope": "@your-scope" }` in the root `package.json`, because nobody
 owns `@repo` on npm. `make-public` renames the package into that scope across every `.ts` and
-`.json` file in the workspace, drops `"private": true`, and runs `pkg sync`.
+`.json` file in the workspace, drops `"private": true`, and runs `pkg sync`. The rename matches
+the exact name only, so a regex-escaped form such as `/^@repo\/foo\/(.*)$/` in a
+`resolve.alias` needs editing by hand.
 
 **Public means no `"private": true`.** That one field is the marker. `pkg sync` derives
 everything else a public package carries, and `vpr check` runs `pkg sync --check`, so a public

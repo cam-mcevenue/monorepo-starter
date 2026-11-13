@@ -45,8 +45,8 @@ to tsgo, Microsoft's TypeScript 7:
 3. In `.zed/settings.json`, drop `--tsrs-lint` from the `oxlint` arguments, and change the
    `effect-tsgo` arguments to `["tsc", "--lsp", "--stdio"]`.
 4. Change `tsrs -b` to `tsc -b` in the build script of
-   `packages/cli/fragments/package.public.json`, if that file exists, then run
-   `vpr cli pkg sync`.
+   `packages/cli/fragments/package.public.json`, then run `vpr cli pkg sync` to update every
+   public package.
 5. Run `vp install`, restart Zed, and run `vpr check` and `vpr test`.
 
 ## Platform pin
