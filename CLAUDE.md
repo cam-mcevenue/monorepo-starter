@@ -157,4 +157,8 @@ are committed, so a fresh clone needs no setup.
   the Docker sandbox. x64 machines cannot install this repo as configured.
 - `minimumReleaseAge: 0` — this repo rides current versions (Effect 4, TypeScript 7, Node 26,
   alchemy beta) on purpose.
+- **Vite+ owns the toolchain.** It installs and selects Node from `.node-version` (the
+  highest-precedence source it checks) and manages pnpm itself, with `pmOnFail: ignore` stopping
+  pnpm from switching versions on its own. Keep `.node-version` as the pin — `engines.node` is a
+  consumer-facing support range, not a dev requirement. Go through `vp`/`vpr`, not bare `pnpm`.
 - No CI. `vpr check` and `vpr test` before committing are the only gates.

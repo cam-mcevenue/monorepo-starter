@@ -45,6 +45,12 @@ peerDependencyRules:
 # alchemy beta), so the release-age gate is off rather than maintained as an allowlist.
 minimumReleaseAge: 0
 
+# Vite+ owns the toolchain: it manages Node (from .node-version) and pnpm itself.
+# Without this, pnpm would also act on devEngines.packageManager and the two can
+# select different pnpm versions, so commands behave differently depending on
+# which one started them.
+pmOnFail: ignore
+
 supportedArchitectures:
   os: [darwin, linux]
   cpu: [arm64]
