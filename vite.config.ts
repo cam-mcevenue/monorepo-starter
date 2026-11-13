@@ -1,7 +1,16 @@
 import { defineConfig } from "vite-plus";
+import * as path from "node:path";
 import { recommended } from "@effect/tsgo/oxlint-presets";
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^@repo\/cli\/(.*)$/,
+        replacement: path.resolve(import.meta.dirname, "packages/cli/src/$1.ts"),
+      },
+    ],
+  },
   fmt: {
     ignorePatterns: ["**/*.md"],
   },

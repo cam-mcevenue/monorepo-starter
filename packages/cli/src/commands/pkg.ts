@@ -109,7 +109,7 @@ const rm = Command.make(
       if (!yes) {
         const confirmed = yield* Prompt.run(
           Prompt.Confirm({
-            message: `Delete ${packagePath} and drop its project reference?`,
+            message: `Delete ${packagePath}?`,
             initial: false,
           }),
         );
@@ -122,7 +122,7 @@ const rm = Command.make(
       yield* Console.log(`Removed ${packageName} and ${packagePath}`);
       yield* Console.log("Next: run `vp install` to update the workspace");
     }),
-).pipe(Command.withDescription("Delete a package in packages/ and its project reference"));
+).pipe(Command.withDescription("Delete a package in packages/"));
 
 export const pkg = Command.make("pkg").pipe(
   Command.withDescription("Manage packages in packages/"),

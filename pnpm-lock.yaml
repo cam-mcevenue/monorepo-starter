@@ -221,9 +221,6 @@ importers:
       '@effect/tsgo':
         specifier: catalog:tooling
         version: 0.68.0
-      '@repo/tsconfig':
-        specifier: workspace:*
-        version: link:packages/tsconfig
       '@types/node':
         specifier: catalog:tooling
         version: 26.6.6
@@ -242,10 +239,6 @@ importers:
       effect:
         specifier: catalog:effect
         version: 4.1.4
-    devDependencies:
-      '@repo/tsconfig':
-        specifier: workspace:*
-        version: link:../packages/tsconfig
 
   packages/cli:
     dependencies:
@@ -259,9 +252,6 @@ importers:
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(vitest@5.1.0)
-      '@repo/tsconfig':
-        specifier: workspace:*
-        version: link:../tsconfig
 
   packages/cli/templates/pkg-effect:
     dependencies:
@@ -272,15 +262,6 @@ importers:
       '@effect/vitest':
         specifier: catalog:effect
         version: 4.1.4(effect@4.1.4)(vitest@5.1.0)
-      '@repo/tsconfig':
-        specifier: workspace:*
-        version: link:../../../tsconfig
-
-  packages/tsconfig:
-    dependencies:
-      typescript:
-        specifier: catalog:tooling
-        version: 7.0.2
 
   scratchpad:
     dependencies:
@@ -311,10 +292,6 @@ importers:
       effect:
         specifier: catalog:effect
         version: 4.1.4
-    devDependencies:
-      '@repo/tsconfig':
-        specifier: workspace:*
-        version: link:../packages/tsconfig
 
 packages:
 

@@ -30,7 +30,6 @@ const templatesDir = (path: Path.Path) => path.resolve(import.meta.dirname, "../
 
 /** The dev CLI itself — removing it with itself is never what you meant. */
 const PROTECTED_PACKAGES = ["cli"];
-const WORKSPACE_TSCONFIG = "tsconfig.workspace.json";
 const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
 /**
@@ -58,48 +57,6 @@ export const findRepoRoot = (
       }
       current = parent;
     }
-  });
-
-/**
- * Insert a project reference into `tsconfig.workspace.json` with a string
- * splice rather than a JSON round-trip, because that file is JSONC — parsing
- * and re-serialising it would silently delete its comments.
- */
-export const addProjectReference = (
-  contents: string,
-  packagePath: string,
-): Effect.Effect<string, ScaffoldError> =>
-  Effect.gen(function* () {
-    const marker = '"references": [';
-    const index = contents.indexOf(marker);
-    if (index === -1) {
-      return yield* new ScaffoldError({
-        message: `Could not find a "references" array in ${WORKSPACE_TSCONFIG}`,
-      });
-    }
-    const insertAt = index + marker.length;
-    return `${contents.slice(0, insertAt)}\n    { "path": "${packagePath}" },${contents.slice(insertAt)}`;
-  });
-
-/** Drop a project reference from `tsconfig.workspace.json`, comments intact. */
-export const removeProjectReference = (
-  contents: string,
-  packagePath: string,
-): Effect.Effect<string, ScaffoldError> =>
-  Effect.gen(function* () {
-    const entry = `{ "path": "${packagePath}" }`;
-    const index = contents.indexOf(entry);
-    if (index === -1) {
-      return yield* new ScaffoldError({
-        message: `No reference to ${packagePath} in ${WORKSPACE_TSCONFIG}`,
-      });
-    }
-    // Take the whole line, including its leading newline and any trailing comma.
-    // tsconfig allows trailing commas, so removing the last entry stays valid.
-    const lineStart = contents.lastIndexOf("\n", index);
-    const afterEntry = index + entry.length;
-    const lineEnd = contents[afterEntry] === "," ? afterEntry + 1 : afterEntry;
-    return contents.slice(0, lineStart) + contents.slice(lineEnd);
   });
 
 /** Directory names under `full` that contain a `package.json`, sorted. */
@@ -190,6 +147,23 @@ const prepareCopy = (
     }
   });
 
+/**
+ * Repoint a tsconfig's relative `extends` after moving it from `fromDir` to
+ * `toDir`. A template is a workspace member, so its `extends` must resolve
+ * where the template sits, and its copy lands at a different depth.
+ * A string splice rather than a JSON round-trip keeps JSONC comments intact.
+ */
+export const retargetExtends = (
+  contents: string,
+  fromDir: string,
+  toDir: string,
+  path: Pick<Path.Path, "relative" | "resolve">,
+): string =>
+  contents.replace(/("extends"\s*:\s*")(\.{1,2}\/[^"]*)"/, (_, prefix: string, from: string) => {
+    const relative = path.relative(toDir, path.resolve(fromDir, from));
+    return `${prefix}${relative.startsWith(".") ? relative : `./${relative}`}"`;
+  });
+
 export interface CreatePackageResult {
   readonly packageName: string;
   readonly packagePath: string;
@@ -244,22 +218,24 @@ export const createPackage = (
     const packageName = `@repo/${name}`;
     yield* prepareCopy(target, templatePackageName, packageName);
 
-    const tsconfigPath = path.join(root, WORKSPACE_TSCONFIG);
-    const tsconfig = yield* orFail(
-      fs.readFileString(tsconfigPath),
-      `Failed to read ${WORKSPACE_TSCONFIG}`,
-    );
-    yield* orFail(
-      fs.writeFileString(tsconfigPath, yield* addProjectReference(tsconfig, packagePath)),
-      `Failed to write ${WORKSPACE_TSCONFIG}`,
-    );
+    const tsconfigPath = path.join(target, "tsconfig.json");
+    if (yield* orFail(fs.exists(tsconfigPath), `Failed to stat ${tsconfigPath}`)) {
+      const tsconfig = yield* orFail(
+        fs.readFileString(tsconfigPath),
+        `Failed to read ${tsconfigPath}`,
+      );
+      yield* orFail(
+        fs.writeFileString(tsconfigPath, retargetExtends(tsconfig, template, target, path)),
+        `Failed to write ${tsconfigPath}`,
+      );
+    }
 
     return { packageName, packagePath };
   });
 
 /**
- * The reverse of `createPackage`: delete the directory and drop its project
- * reference. Nothing here prompts — the CLI owns confirmation.
+ * The reverse of `createPackage`: delete the directory. Nothing here prompts —
+ * the CLI owns confirmation.
  */
 export const removePackage = (
   name: string,
@@ -294,16 +270,6 @@ export const removePackage = (
     yield* orFail(
       fs.remove(target, { recursive: true, force: true }),
       `Failed to remove ${packagePath}`,
-    );
-
-    const tsconfigPath = path.join(root, WORKSPACE_TSCONFIG);
-    const tsconfig = yield* orFail(
-      fs.readFileString(tsconfigPath),
-      `Failed to read ${WORKSPACE_TSCONFIG}`,
-    );
-    yield* orFail(
-      fs.writeFileString(tsconfigPath, yield* removeProjectReference(tsconfig, packagePath)),
-      `Failed to write ${WORKSPACE_TSCONFIG}`,
     );
 
     return { packageName, packagePath };

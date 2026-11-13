@@ -1,5 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@repo/tsconfig/base.json",
-  "include": ["src/**/*.ts"]
+  // Resolves from where the template sits. `pkg add` recomputes it for the
+  // copy at packages/<name>, which is two levels shallower.
+  "extends": "../../../../tsconfig.base.json",
+  "include": ["src/**/*.ts", "test/**/*.ts", "test/**/*.json"]
 }

@@ -1,14 +1,21 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@repo/tsconfig/base.json",
-  "include": ["src/**/*.ts"],
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*.ts", "test/**/*.ts"],
   "compilerOptions": {
     "types": ["node"],
-    // Only this package may reach for these unstable Effect 4 APIs.
+    "paths": {
+      // Lets a test load this package's internals, which its exports map
+      // blocks. The matching runtime alias is in the root vite.config.ts.
+      "@repo/cli/*": ["./src/*.ts"]
+    },
+    // The entry merges with the base's key by key, but this array replaces the
+    // base's allowedUnstableApis outright, so @effect/vitest is repeated here.
     "plugins": [
       {
         "name": "@effect/language-service",
         "allowedUnstableApis": [
+          "@effect/vitest",
           "effect/cli",
           "effect/FileSystem",
           "effect/Path",

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // The language service supplies hovers, completions and refactors. Its
+    // diagnostics stay off so Oxlint reports Effect rules once rather than
+    // twice; severities live in the `lint` block of the root vite.config.ts.
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": false,
+        "effectFn": ["untraced"],
+        // @effect/vitest is unstable in its entirety and every test uses it.
+        "allowedUnstableApis": ["@effect/vitest"]
+      }
+    ]
+  }
+}

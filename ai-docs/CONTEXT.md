@@ -15,9 +15,9 @@ differently edits its own copy of that skill, and the two then diverge. That is 
 scaffolding copies once and never migrates.
 
 A topic directory holds `.md` documents and may hold `.ts` files beside them. The `.ts` files
-are examples and patterns that documents link to. Nothing builds or runs them, and when the
-first one lands, add `{ "path": "ai-docs" }` back to `tsconfig.workspace.json` so `vpr check`
-type-checks it. The reference is out until then, because an empty project is a `TS18003` error.
+are examples and patterns that documents link to. Nothing builds or runs them, but
+`ai-docs/tsconfig.json` covers every `.ts` file here, so `vpr check` type-checks each one as soon
+as it lands.
 
 ## Writing a document here
 
