@@ -1,2 +1,18 @@
 node_modules
 .DS_Store
+
+# Build output
+dist
+*.tsbuildinfo
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Infrastructure state
+.alchemy
+.wrangler
+
+# Test output
+coverage
