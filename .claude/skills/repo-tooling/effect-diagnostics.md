@@ -27,8 +27,10 @@ reports nothing and exits 0, and `oxlint -c vite.config.ts` fails with
 `unknown field 'resolve'`.
 
 The editor also needs the Effect-patched Oxlint binding. `.zed/settings.json` starts the
-`oxlint` language server as `node_modules/.bin/effect-tsgo oxlint --lsp`, the same wrapper the
-scripts use. Started as plain `oxlint --lsp`, it fails to load the config with
+`oxlint` language server as `node_modules/.bin/effect-tsgo --tsrs-lint oxlint --lsp`, the
+same wrapper the scripts use, and the `effect-tsgo` TypeScript server as
+`node_modules/.bin/effect-tsgo tsrs --lsp --stdio`, so the editor runs the pinned tsrs too.
+Started as plain `oxlint --lsp`, Oxlint fails to load the config with
 `Unknown plugin: 'effecttsgo'`. Nothing in `node_modules` is patched.
 
 `oxlint.config.ts` types itself with `import type { OxlintConfig } from "vite-plus/lint"`.

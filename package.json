@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "effect-tsgo vp check",
-    "lint": "effect-tsgo vp lint",
+    "check": "effect-tsgo --tsrs-lint vp check",
+    "lint": "effect-tsgo --tsrs-lint vp lint",
     "format": "vp fmt",
     "format:check": "vp fmt --check",
     "test": "vp test"
@@ -13,6 +13,7 @@
   "devDependencies": {
     "@effect/tsgo": "catalog:tooling",
     "@types/node": "catalog:tooling",
+    "tsrs": "catalog:tooling",
     "typescript": "catalog:tooling",
     "vite": "catalog:tooling",
     "vite-plus": "catalog:tooling"

@@ -2,10 +2,11 @@
   "lsp": {
     "oxlint": {
       // Run Oxlint through effect-tsgo, which loads the Effect-patched binding,
-      // the same way `vpr lint` does. The stock binary rejects the effecttsgo plugin.
+      // the same way `vpr lint` does, with type-aware rules on tsrs. The stock
+      // binary rejects the effecttsgo plugin.
       "binary": {
         "path": "node_modules/.bin/effect-tsgo",
-        "arguments": ["oxlint", "--lsp"]
+        "arguments": ["--tsrs-lint", "oxlint", "--lsp"]
       },
       "initialization_options": {
         "settings": {
@@ -14,6 +15,13 @@
           "typeAware": true,
           "unusedDisableDirectives": "deny"
         }
+      }
+    },
+    "effect-tsgo": {
+      // The Effect-patched tsrs, at the version pinned in package.json.
+      "binary": {
+        "path": "node_modules/.bin/effect-tsgo",
+        "arguments": ["tsrs", "--lsp", "--stdio"]
       }
     },
     "oxfmt": {
