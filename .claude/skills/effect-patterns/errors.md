@@ -12,7 +12,7 @@ export class ScaffoldError extends Data.TaggedError("ScaffoldError")<{
 
 The error channel should name the step that failed, not the mechanism. A signature carrying
 `PlatformError` tells the caller a filesystem call failed somewhere; one carrying
-`ScaffoldError` with `Failed to read tsconfig.workspace.json` tells them what to fix.
+`ScaffoldError` with `Failed to read the templates directory` tells them what to fix.
 
 ## Two rules enforce this
 
