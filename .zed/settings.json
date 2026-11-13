@@ -1,6 +1,13 @@
 {
   "lsp": {
     "oxlint": {
+      // Run Oxlint through effect-tsgo, which loads the Effect-patched binding,
+      // the same way `vpr lint` does, with type-aware rules on tsrs. The stock
+      // binary rejects the effecttsgo plugin.
+      "binary": {
+        "path": "node_modules/.bin/effect-tsgo",
+        "arguments": ["--tsrs-lint", "oxlint", "--lsp"]
+      },
       "initialization_options": {
         "settings": {
           "run": "onType",
@@ -10,6 +17,13 @@
         }
       }
     },
+    "effect-tsgo": {
+      // The Effect-patched tsrs, at the version pinned in package.json.
+      "binary": {
+        "path": "node_modules/.bin/effect-tsgo",
+        "arguments": ["tsrs", "--lsp", "--stdio"]
+      }
+    },
     "oxfmt": {
       "initialization_options": {
         "settings": {
@@ -17,8 +31,7 @@
           "run": "onSave"
         }
       }
-    },
-    "effect-tsgo": {}
+    }
   },
   "languages": {
     "CSS": {
@@ -62,7 +75,13 @@
           "code_action": "source.fixAll.oxc"
         }
       ],
-      "language_servers": ["effect-tsgo", "!vtsls", "!typescript-language-server", "!typescript-ls"]
+      "language_servers": [
+        "effect-tsgo",
+        "oxlint",
+        "!vtsls",
+        "!typescript-language-server",
+        "!typescript-ls"
+      ]
     },
     "JSON": {
       "format_on_save": "on",
@@ -115,7 +134,13 @@
           }
         }
       ],
-      "language_servers": ["effect-tsgo", "!vtsls", "!typescript-language-server", "!typescript-ls"]
+      "language_servers": [
+        "effect-tsgo",
+        "oxlint",
+        "!vtsls",
+        "!typescript-language-server",
+        "!typescript-ls"
+      ]
     },
     "TSX": {
       "format_on_save": "on",
@@ -129,7 +154,13 @@
           }
         }
       ],
-      "language_servers": ["effect-tsgo", "!vtsls", "!typescript-language-server", "!typescript-ls"]
+      "language_servers": [
+        "effect-tsgo",
+        "oxlint",
+        "!vtsls",
+        "!typescript-language-server",
+        "!typescript-ls"
+      ]
     },
     "YAML": {
       "format_on_save": "on",

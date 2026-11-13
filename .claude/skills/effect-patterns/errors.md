@@ -26,7 +26,7 @@ than from `${cause}`.
 
 ## Functions returning Effect
 
-`effecttsgo/effect-fn-opportunity` is `"error"` in the `lint` block of `vite.config.ts`, so a
+`effecttsgo/effect-fn-opportunity` is `"error"` in `oxlint.config.ts`, so a
 function written as an arrow returning `Effect.gen` fails `vpr check`. Write it as
 `Effect.fnUntraced(function* (...) {})`.
 

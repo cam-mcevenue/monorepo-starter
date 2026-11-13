@@ -15,8 +15,9 @@ vpr check     # this repo's check script
 vp check      # Vite+'s built-in check
 ```
 
-The `check` and `lint` scripts wrap `vp` in `effect-tsgo`, which preloads the patched Oxlint
-binding carrying the Effect rules. Running those built-ins skips the wrapper and fails with
+The `check` and `lint` scripts wrap `vp` in `effect-tsgo --tsrs-lint`, which preloads the
+patched Oxlint binding carrying the Effect rules and runs the type-aware rules and the typecheck
+on tsrs, the version pinned in `package.json`. Running those built-ins skips the wrapper and fails with
 `Unknown plugin: 'effecttsgo'`, measured on both. `format`, `format:check` and `test` need no
 wrapper, so reaching for `vpr` everywhere is simpler than remembering which do.
 

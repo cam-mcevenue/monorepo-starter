@@ -28,6 +28,27 @@ from the development pin.
 `pnpm-workspace.yaml` stops pnpm from switching versions on its own, leaving Vite+ as the
 single owner. The declaration stays so a bare `pnpm` still knows what the project expects.
 
+## TypeScript: tsrs
+
+The type checker is tsrs, the Oxc team's Rust port of TypeScript 7, pinned in the `tooling`
+catalog. There is no `typescript` package. `effect-tsgo` runs the Effect-patched build of the
+pinned tsrs in three places: the `check` and `lint` scripts (`--tsrs-lint`), and both Zed
+language servers in `.zed/settings.json`. Measured against tsgo on a probe file: the same
+findings, and `vp check`'s lint and typecheck step at about 340ms instead of 435ms.
+
+tsrs tracks a TypeScript beta, and Effect labels its tsrs support experimental. To switch back
+to tsgo, Microsoft's TypeScript 7:
+
+1. In the `tooling` catalog, replace `tsrs` with `typescript` at a 7.x release, and swap the
+   root `devDependencies` entry to match.
+2. In `package.json`, drop `--tsrs-lint` from the `check` and `lint` scripts.
+3. In `.zed/settings.json`, drop `--tsrs-lint` from the `oxlint` arguments, and change the
+   `effect-tsgo` arguments to `["tsc", "--lsp", "--stdio"]`.
+4. Change `tsrs -b` to `tsc -b` in the build script of
+   `packages/cli/fragments/package.public.json`, if that file exists, then run
+   `vpr cli pkg sync`.
+5. Run `vp install`, restart Zed, and run `vpr check` and `vpr test`.
+
 ## Platform pin
 
 `supportedArchitectures` in `pnpm-workspace.yaml` is pinned to `arm64` and `glibc`, which
