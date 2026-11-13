@@ -182,6 +182,22 @@ export const npmScope = (snapshot: Snapshot): string | undefined => {
   return typeof scope === "string" ? scope : undefined;
 };
 
+const requireScope = (snapshot: Snapshot): Effect.Effect<string, WorkspaceError> => {
+  const scope = npmScope(snapshot);
+  return scope === undefined
+    ? Effect.fail(
+        new WorkspaceError({
+          message: `Set the npm scope first: add "repo": { "npmScope": "@your-scope" } to the root package.json`,
+        }),
+      )
+    : Effect.succeed(scope);
+};
+
+/** Fail early when a public package could not be named, before anything is written. */
+export const ensureNpmScope = Effect.fnUntraced(function* (root: string) {
+  return yield* requireScope(yield* loadWorkspace(root));
+});
+
 export const NPM_SCOPE_UNSET = 'public packages exist but "repo": { "npmScope" } is not set';
 
 /** Sync never deletes, so what a private package should not carry is reported instead. */
@@ -444,12 +460,7 @@ export const makePublic = Effect.fnUntraced(function* (root: string, name: strin
   if (!isPrivate(target)) {
     return yield* new WorkspaceError({ message: `${dir} is already public` });
   }
-  const scope = npmScope(snapshot);
-  if (scope === undefined) {
-    return yield* new WorkspaceError({
-      message: `Set the npm scope first: add "repo": { "npmScope": "@your-scope" } to the root package.json`,
-    });
-  }
+  const scope = yield* requireScope(snapshot);
 
   const byName = new Map(snapshot.members.map((member) => [member.manifest["name"], member]));
   const privateDeps = dependencyNames(target.manifest, BUILD_DEPENDENCY_FIELDS).filter((dep) => {

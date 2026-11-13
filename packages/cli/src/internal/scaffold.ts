@@ -2,6 +2,7 @@ import { Data, Effect, FileSystem, Path, type PlatformError } from "effect";
 import type { ChildProcessSpawner } from "effect/process";
 import {
   dependentsOf,
+  ensureNpmScope,
   loadWorkspace,
   makePublic,
   syncWorkspace,
@@ -224,6 +225,9 @@ export const createPackage = (
     }
     if (yield* orFail(fs.exists(target), `Failed to stat ${packagePath}`)) {
       return yield* new ScaffoldError({ message: `${packagePath} already exists` });
+    }
+    if (visibility === "public") {
+      yield* ensureNpmScope(root);
     }
 
     // The template's own package name is the string to repoint, so templates are

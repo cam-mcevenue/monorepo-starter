@@ -187,4 +187,16 @@ describe("createPackage", () => {
       expect(repo.read("packages/widget/test/index.test.ts")).toContain('from "@acme/widget"');
     }),
   );
+
+  it.effect("public without a scope fails before copying, leaving nothing behind", () =>
+    Effect.gen(function* () {
+      const repo = fixture({ "package.json": { name: "monorepo", private: true } });
+      const error = yield* run(
+        Effect.flip(createPackage(repo.root, "widget", "pkg-effect", "public")),
+      );
+
+      expect(error.message).toContain('"repo": { "npmScope"');
+      expect(repo.exists("packages/widget")).toBe(false);
+    }),
+  );
 });
