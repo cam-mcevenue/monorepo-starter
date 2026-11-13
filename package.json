@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@effect/tsgo": "catalog:tooling",
+    "@repo/tsconfig": "workspace:*",
     "@types/node": "catalog:tooling",
     "typescript": "catalog:tooling",
     "vite": "catalog:tooling",

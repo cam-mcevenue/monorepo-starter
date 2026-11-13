@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "./tsconfig.base.json",
+  "extends": "@repo/tsconfig/base.json",
   "include": [
     // Tests import from `src`, and a composite project must list every file it
     // pulls in, so the source globs belong here too.
     "./apps/*/src/**/*.ts",
     "./packages/*/src/**/*.ts",
-    "./templates/*/src/**/*.ts",
-    "./templates/*/test/**/*.ts",
-    "./templates/*/test/**/*.json",
+    "./packages/cli/templates/*/src/**/*.ts",
+    "./packages/cli/templates/*/test/**/*.ts",
+    "./packages/cli/templates/*/test/**/*.json",
     "./apps/*/test/**/*.ts",
     "./apps/*/test/**/*.json",
     "./apps/**/test/**/*.ts",

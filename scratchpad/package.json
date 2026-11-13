@@ -13,5 +13,8 @@
     "@effect/platform-node": "catalog:effect",
     "@effect/sql-sqlite-node": "catalog:effect",
     "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@repo/tsconfig": "workspace:*"
   }
 }
