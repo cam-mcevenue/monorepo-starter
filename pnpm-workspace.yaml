@@ -1,4 +1,5 @@
 packages:
+  - ai-docs
   - apps/*
   - packages/*
   # Templates are workspace members so `vp check`/`lint`/`test` keep them valid.
