@@ -52,6 +52,3 @@ the only gates in this repo, since there is no CI.
 
 Run both. A passing typecheck says nothing about whether the code runs, and `vpr test` is what
 executes it.
-
-One blind spot in both: the `extends` line in `tsconfig.workspace.json` is inert, because that
-file compiles nothing. Point it at a file that does not exist and every command still passes.

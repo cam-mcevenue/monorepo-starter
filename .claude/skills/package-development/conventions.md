@@ -28,9 +28,9 @@ The boundary is enforced by the `exports` map, not by convention:
 `./*` because a longer literal prefix beats a wildcard, so the block holds regardless of
 ordering.
 
-Tests reach internals by relative path, `../src/internal/thing.ts`, which is the intended way
-in. The `paths` block in `tsconfig.tests.json` exists for the harder cases: a test that needs
-another workspace package which would otherwise look like a cycle.
+Tests reach internals through the package name, `@repo/cli/internal/scaffold`, which needs a
+typecheck alias and a runtime alias side by side. [`typescript.md`](./typescript.md) covers
+the pair.
 
 **Adding a file to `src/` publishes a new entry point.** So `src/` is an API decision, not a
 file-organisation one. Anything not meant to be imported from outside starts life in
@@ -55,9 +55,9 @@ errors. The guard is what catches that.
 
 ## Running from source
 
-Nothing in this repo builds. `erasableSyntaxOnly` and `rewriteRelativeImportExtensions` let
-Node execute the TypeScript directly, so `exports` points at `./src/*.ts` and relative imports
-carry the `.ts` extension.
+Inside the workspace nothing builds. `erasableSyntaxOnly` and
+`rewriteRelativeImportExtensions` let Node execute the TypeScript directly, so `exports` points
+at `./src/*.ts` and relative imports carry the `.ts` extension.
 
-That holds while packages stay inside the workspace. Publishing one to npm would need a real
-build, because Node refuses to strip types under `node_modules`.
+A package published to npm builds, because Node refuses to strip types under `node_modules`.
+[`registration.md`](./registration.md) covers making one publishable.

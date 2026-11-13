@@ -1,7 +1,7 @@
 # Effect diagnostics: tsconfig or vite.config.ts
 
-This repo combines two things. The `plugins` block in
-`packages/tsconfig/tsconfig.base.json` comes from Effect's own repo, which runs plain `tsc`. The `lint` block in `vite.config.ts` comes from Vite+, which
+This repo combines two things. The `plugins` block in `tsconfig.effect.json` comes from
+Effect's own repo, which runs plain `tsc`. The `lint` block in `vite.config.ts` comes from Vite+, which
 runs Oxlint. Both involve the same Effect language service, and each file owns a different part
 of it.
 
@@ -10,7 +10,7 @@ of it.
 **The tsconfig files tell the analyzer about the code.** Options like `effectFn`,
 `allowedUnstableApis`, `allowedExperimentalApis` and `allowedDuplicatedPackages` describe how
 this codebase is written. They are facts the rules need to do their job, not policy. A fact the
-whole repo shares goes in `packages/tsconfig/tsconfig.base.json`; a fact one package needs goes in that
+whole repo shares goes in `tsconfig.effect.json`; a fact one package needs goes in that
 package's own `tsconfig.json`, which merges with the base.
 
 **`vite.config.ts` decides which rules run and how loudly.** Severities, the preset to extend,
@@ -93,9 +93,8 @@ directory and is silently ignored by `vpr check` from the root. Measured: 0 warn
 package directory, 57 from the root.
 
 The plugin also has an `overrides` array taking `include` and `exclude`, but those patterns
-resolve relative to the config file that declares them. `include: ["packages/cli/**"]` written
-in `packages/tsconfig/tsconfig.base.json` resolves against `packages/tsconfig/` and matches
-nothing, silently. The package's own tsconfig avoids the problem entirely.
+resolve relative to the config file that declares them, and a pattern that matches nothing
+fails silently. The package's own tsconfig avoids the problem entirely.
 
 ## Current settings
 
@@ -110,13 +109,15 @@ listed in `allowedUnstableApis`, split by who needs them:
 
 | Config | Allows | Because |
 | --- | --- | --- |
-| `packages/tsconfig/tsconfig.base.json` | `@effect/vitest` | every package's tests import it |
-| `packages/cli/tsconfig.json` | `effect/cli`, `effect/FileSystem`, `effect/Path`, `effect/PlatformError`, `@effect/platform-node` | only the CLI reaches for these |
+| `tsconfig.effect.json` | `@effect/vitest` | every package's tests import it |
+| `packages/cli/tsconfig.json` | `@effect/vitest`, `effect/cli`, `effect/FileSystem`, `effect/Path`, `effect/PlatformError`, `@effect/platform-node` | only the CLI reaches for these |
 
-A package's own `plugins` entry **merges** with the base rather than replacing it. The CLI
-declares only its allowlist and still inherits `diagnostics: false` and `effectFn`, which was
-measured: an arrow returning `Effect.gen` inside `packages/cli` still fails with
-`effect-fn-opportunity`.
+A package's own `plugins` entry **merges** with the base key by key. The CLI declares only its
+allowlist and still inherits `diagnostics: false` and `effectFn`, which was measured: an arrow
+returning `Effect.gen` inside `packages/cli` still fails with `effect-fn-opportunity`.
+
+Arrays inside the entry **replace**. The CLI's `allowedUnstableApis` drops the base's list, so
+it repeats `@effect/vitest`; without it every CLI test warned `unstable-api-usage`, measured.
 
 So a fact that one package needs belongs in that package's `tsconfig.json`, and a fact the whole
 repo needs belongs in the base. Scoping this way keeps the warning live elsewhere, which is the

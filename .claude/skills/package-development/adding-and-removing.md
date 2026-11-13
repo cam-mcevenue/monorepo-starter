@@ -19,13 +19,13 @@ vp install
    own package name across the copied `.ts` and `.json` files.
 3. Prunes `node_modules` and `dist`, which `cp -r` would otherwise carry over from the
    template's own install.
-4. Inserts `{ "path": "packages/<name>" }` into `tsconfig.workspace.json`.
+4. Repoints the copy's `tsconfig.json` `extends` from the template's depth to
+   `packages/<name>`.
 
-`pkg rm` reverses it: deletes the directory and drops the project reference, behind a
-confirmation prompt that defaults to no.
+`pkg rm` deletes the directory, behind a confirmation prompt that defaults to no.
 
-A package built by hand compiles fine and sits outside the solution build, so `vpr check`
-never looks at it. That is the failure worth avoiding.
+A template copied by hand keeps `../../../../tsconfig.base.json`, which from `packages/<name>`
+points above the repo, and `vpr check` fails with `typescript(tsconfig-error)`.
 
 `pkg rm` refuses to delete `packages/cli`, and leaves it out of the picker. Deleting the tool
 you are running is available by hand if you mean it.
@@ -41,11 +41,10 @@ that stops compiling fails the build.
 
 Two things a new template needs:
 
-- **A `tsconfig.json` extending `@repo/tsconfig/base.json`**, with `@repo/tsconfig` as a
-  devDependency. The specifier resolves the same at any depth, which is how one file works
-  both in the template at four directories deep and in the copy at two.
-- **A test.** The tests project is an error when empty, so at least one template carries a
-  passing test. It also proves the toolchain end to end from a fresh copy.
+- **A `tsconfig.json` extending `../../../../tsconfig.base.json`**, the path from where the
+  template sits. `pkg add` repoints it for the copy, and the scaffold test fails any template
+  whose `extends` misses the root base in either place.
+- **A test.** It proves the toolchain end to end from a fresh copy.
 
 The template's own package name is whatever you call it. The CLI reads it from the manifest
 rather than assuming, so nothing needs editing when you add one.
