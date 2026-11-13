@@ -3,6 +3,19 @@
   "extends": "@repo/tsconfig/base.json",
   "include": ["src/**/*.ts"],
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    // Only this package may reach for these unstable Effect 4 APIs.
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "allowedUnstableApis": [
+          "effect/cli",
+          "effect/FileSystem",
+          "effect/Path",
+          "effect/PlatformError",
+          "@effect/platform-node"
+        ]
+      }
+    ]
   }
 }

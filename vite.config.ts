@@ -10,9 +10,8 @@ export default defineConfig({
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
       "vite-plus/prefer-vite-plus-imports": "error",
-      // Effect 4 marks effect/cli, FileSystem, Path and friends as unstable.
-      // This repo builds on them deliberately, so the warning is noise.
-      "effecttsgo/unstable-api-usage": "off",
+      // Owned here rather than in tsconfig: this is what vpr check reads.
+      "effecttsgo/effect-fn-opportunity": "error",
     },
     options: { typeAware: true, typeCheck: true },
   },

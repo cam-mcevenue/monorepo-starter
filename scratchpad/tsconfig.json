@@ -9,14 +9,6 @@
     "declarationMap": false,
     "composite": false,
     "incremental": false,
-    "types": ["node"],
-    "plugins": [
-      {
-        "name": "@effect/language-service",
-        "effectFn": ["untraced"],
-        "namespaceImportPackages": [],
-        "diagnosticSeverity": { "effectFnOpportunity": "error" }
-      }
-    ]
+    "types": ["node"]
   }
 }
