@@ -7,7 +7,7 @@
     "dist/**/*.d.ts.map"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.build.json"
+    "build": "tsrs -b tsconfig.build.json"
   },
   "publishConfig": {
     "access": "public"

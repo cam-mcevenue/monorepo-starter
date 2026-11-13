@@ -64,12 +64,12 @@ workspace package in `dependencies` or `peerDependencies`, sorted, replacing onl
 `references` array so comments elsewhere survive. `devDependencies` never get one, since only
 tests import them and the build includes `src` alone. Exports point at source,
 so building package A follows its import of package B into B's `.ts` files, which fall outside
-A's `rootDir: src`. A reference to B's build config makes `tsc -b` build B first and read B's
+A's `rootDir: src`. A reference to B's build config makes `tsrs -b` build B first and read B's
 `dist/*.d.ts` instead. Type-checking needs no references, because a check program may include
 B's source freely.
 
 **`tsBuildInfoFile` lives in `dist`.** `composite` turns on incremental builds, and the build
-info records input hashes and outputs so `tsc -b` can skip unchanged work. Its default location
+info records input hashes and outputs so `tsrs -b` can skip unchanged work. Its default location
 is derived from `outDir` relative to `rootDir`, which lands it in the package root. There it
 outlives a deleted `dist` and can report a stale build as up to date. Inside `dist`, deleting
 one deletes both.

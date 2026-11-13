@@ -24,7 +24,7 @@ const snapshot = (...members: ReadonlyArray<Member>): Snapshot => ({
     buildConfig: buildConfigFragment,
     manifest: {
       files: ["src/**/*.ts", "dist/**/*.js"],
-      scripts: { build: "tsc -b tsconfig.build.json" },
+      scripts: { build: "tsrs -b tsconfig.build.json" },
       publishConfig: { access: "public" },
     },
   },
@@ -77,7 +77,7 @@ describe("planSync", () => {
       }),
     );
     const manifest = editedManifest(snap, "packages/foo");
-    expect(manifest?.scripts).toEqual({ build: "tsc -b tsconfig.build.json", test: "vitest" });
+    expect(manifest?.scripts).toEqual({ build: "tsrs -b tsconfig.build.json", test: "vitest" });
     expect(manifest?.files).toEqual(["AGENTS.md", "dist/**/*.js", "src/**/*.ts"]);
     expect(manifest?.publishConfig.access).toBe("public");
   });
