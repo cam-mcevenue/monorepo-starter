@@ -51,38 +51,22 @@ Add both halves together. Either alone passes one gate and fails the other.
 
 ## Build configs
 
-A publishable package carries `tsconfig.build.json`, and nothing else does. Apps and
-infrastructure are emitted by their deploy tooling. The CLI does not generate build configs
-yet, so this section is the design to follow by hand:
-
-```jsonc
-{
-  "extends": "./tsconfig.json",
-  "include": ["src"],
-  "compilerOptions": {
-    "noEmit": false,
-    "composite": true,
-    "rootDir": "src",
-    "outDir": "dist",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "tsBuildInfoFile": "dist/tsconfig.build.tsbuildinfo"
-  },
-  "references": [{ "path": "../other/tsconfig.build.json" }]
-}
-```
+A public package carries `tsconfig.build.json`, and nothing else does. Apps and
+infrastructure are emitted by their deploy tooling. `vpr cli pkg sync` creates the file from
+`packages/cli/fragments/tsconfig.build.json`, which is the place to read or change the
+settings.
 
 It extends the package's own `tsconfig.json`, so the build sees the same `types` and plugin
-settings as the editor, and only narrows `include` and switches emit on. The package builds
-with `"build": "tsc -b tsconfig.build.json"`.
+settings as the editor, and only narrows `include` and switches emit on.
 
-**References link build configs only, one per workspace dependency.** Exports point at source,
+**References link build configs only, and `pkg sync` owns them.** It writes one per public
+workspace package in `dependencies` or `peerDependencies`, sorted, replacing only the
+`references` array so comments elsewhere survive. `devDependencies` never get one, since only
+tests import them and the build includes `src` alone. Exports point at source,
 so building package A follows its import of package B into B's `.ts` files, which fall outside
 A's `rootDir: src`. A reference to B's build config makes `tsc -b` build B first and read B's
 `dist/*.d.ts` instead. Type-checking needs no references, because a check program may include
-B's source freely. Every reference target must itself be publishable: npm consumers cannot
-install a private workspace package.
+B's source freely.
 
 **`tsBuildInfoFile` lives in `dist`.** `composite` turns on incremental builds, and the build
 info records input hashes and outputs so `tsc -b` can skip unchanged work. Its default location

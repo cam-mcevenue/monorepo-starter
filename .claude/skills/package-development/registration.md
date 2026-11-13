@@ -29,34 +29,43 @@ Changing a package's path touches:
 
 1. The `pnpm-workspace.yaml` glob that matched the old path.
 2. The relative `extends` in its `tsconfig.json`, if the depth changes.
-3. The `references` in any `tsconfig.build.json` that points at it.
+3. Run `vpr cli pkg sync`, which rewrites any build `references` that pointed at the old path.
 4. The `resolve.alias` path in the root `vite.config.ts`, if it has one.
 
 Use `git mv` so history follows the files.
 
 ## Making a package publishable
 
-Everything here runs from TypeScript source, so a package that leaves the workspace needs work
-no internal package needs.
+```sh
+vpr cli pkg add my-lib --public     # new package, public from the start
+vpr cli pkg make-public my-lib      # an existing private package
+vp install                          # relink the renamed package
+```
 
-**It needs a real build.** Node refuses to strip types under `node_modules`, so a published
-package whose `exports` point at `./src/*.ts` fails on install with
-`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`. Add a `tsconfig.build.json` and a
-`"build": "tsc -b tsconfig.build.json"` script, as [`typescript.md`](./typescript.md) lays out.
+Both need `"repo": { "npmScope": "@your-scope" }` in the root `package.json`, because nobody
+owns `@repo` on npm. `make-public` renames the package into that scope across every `.ts` and
+`.json` file in the workspace, drops `"private": true`, and runs `pkg sync`.
 
-**Its `exports` swap at publish time.** `exports` keeps pointing at `./src/*.ts` so the
-workspace runs from source, and `publishConfig.exports` points consumers at `./dist/*.js`.
+**Public means no `"private": true`.** That one field is the marker. `pkg sync` derives
+everything else a public package carries, and `vpr check` runs `pkg sync --check`, so a public
+package missing any of it fails the gate:
 
-**It needs `files: ["dist", "src"]`.** Absent, the tarball ships whatever npm decides. `src`
-rides along because `declarationMap` points go-to-definition at the source.
+| Derived | From | Because |
+| --- | --- | --- |
+| `tsconfig.build.json` and its `references` | the build fragment and the package's deps | Node refuses to strip types under `node_modules`, so a published package needs built JavaScript |
+| `files`, `scripts.build`, `publishConfig.access` | `packages/cli/fragments/package.public.json` | a scoped package defaults to private on npm, which fails `npm publish` with `402 Payment Required` |
+| `publishConfig.exports` | `exports`, with `./src/X.ts` mapped to `./dist/X.js` | the workspace runs from source while consumers get the build |
 
-**Its workspace dependencies must be publishable too.** A consumer cannot install a private
-workspace package, and each one is also a `references` entry in the build config.
+The fragment's values win over a package's own, except `files`, where a package may add
+entries beyond the fragment's.
 
-**A scoped package needs `publishConfig.access: "public"`.** Scoped packages default to
-private, and private scoped packages are a paid feature, so a bare `npm publish` fails with
-`402 Payment Required`.
+**A public package depends only on public workspace packages.** A consumer cannot install a
+private one. `make-public` refuses and lists the private dependencies to convert first, and
+`pkg sync --check` reports the same thing if one appears later.
+
+**Sync never deletes.** Setting `"private": true` by hand on a public package leaves its build
+files behind, and `pkg sync --check` reports them until you remove them.
 
 **Anything it must carry has to live inside its own directory.** A tarball cannot reach a
-sibling. This is why `packages/cli/templates/` sits inside the CLI package rather than at the
-repo root.
+sibling. This is why `packages/cli/templates/` and `packages/cli/fragments/` sit inside the CLI
+package rather than at the repo root.

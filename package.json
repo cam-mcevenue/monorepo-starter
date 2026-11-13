@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "effect-tsgo --tsrs-lint vp check",
+    "check": "effect-tsgo --tsrs-lint vp check && vpx packages/cli/src/bin.ts pkg sync --check",
     "lint": "effect-tsgo --tsrs-lint vp lint",
     "format": "vp fmt",
     "format:check": "vp fmt --check",
