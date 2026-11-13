@@ -1,8 +1,8 @@
 import { Data, Effect, FileSystem, Path, type PlatformError } from "effect";
 
 /**
- * Internal implementation of `create-pkg`. The command module owns the CLI
- * surface; this module owns the filesystem work.
+ * Internal implementation of `pkg add` and `pkg rm`. The command module owns
+ * the CLI surface; this module owns the filesystem work.
  */
 
 export class ScaffoldError extends Data.TaggedError("ScaffoldError")<{
@@ -20,8 +20,13 @@ const orFail = <A>(
 
 const PACKAGE_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const TEMPLATES_DIR = "templates";
 const PACKAGES_DIR = "packages";
+
+/**
+ * Templates ship alongside the CLI, so resolve them from this file rather than
+ * from the repo root. That keeps the two together wherever the CLI is run from.
+ */
+const templatesDir = (path: Path.Path) => path.resolve(import.meta.dirname, "../../templates");
 
 /** The dev CLI itself — removing it with itself is never what you meant. */
 const PROTECTED_PACKAGES = ["cli"];
@@ -97,16 +102,15 @@ export const removeProjectReference = (
     return contents.slice(0, lineStart) + contents.slice(lineEnd);
   });
 
-/** Directory names under `dir` that contain a `package.json`, sorted. */
-const listPackageDirs = Effect.fnUntraced(function* (root: string, dir: string) {
+/** Directory names under `full` that contain a `package.json`, sorted. */
+const listPackageDirs = Effect.fnUntraced(function* (full: string, label: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  const full = path.join(root, dir);
-  if (!(yield* orFail(fs.exists(full), `Failed to stat ${dir}`))) {
+  if (!(yield* orFail(fs.exists(full), `Failed to stat ${label}`))) {
     return [] as Array<string>;
   }
-  const entries = yield* orFail(fs.readDirectory(full), `Failed to read ${dir}`);
+  const entries = yield* orFail(fs.readDirectory(full), `Failed to read ${label}`);
 
   const found: Array<string> = [];
   for (const entry of [...entries].sort()) {
@@ -119,13 +123,19 @@ const listPackageDirs = Effect.fnUntraced(function* (root: string, dir: string) 
 });
 
 /**
- * Every directory in `templates/` that looks like a package. Read from disk so
- * adding a template directory is all it takes to offer a new choice.
+ * Every template directory that looks like a package. Read from disk so adding
+ * a directory is all it takes to offer a new choice.
  */
-export const listTemplates = (root: string) => listPackageDirs(root, TEMPLATES_DIR);
+export const listTemplates = Effect.fnUntraced(function* () {
+  const path = yield* Path.Path;
+  return yield* listPackageDirs(templatesDir(path), "the templates directory");
+});
 
 /** Every directory in `packages/` that looks like a package. */
-export const listPackages = (root: string) => listPackageDirs(root, PACKAGES_DIR);
+export const listPackages = Effect.fnUntraced(function* (root: string) {
+  const path = yield* Path.Path;
+  return yield* listPackageDirs(path.join(root, PACKAGES_DIR), PACKAGES_DIR);
+});
 
 /** Packages that `pkg rm` is allowed to delete — never offer the CLI itself. */
 export const listRemovablePackages = (root: string) =>
@@ -206,14 +216,13 @@ export const createPackage = (
     yield* validateName(name);
 
     const root = yield* findRepoRoot(process.cwd());
-    const templatePath = `${TEMPLATES_DIR}/${templateName}`;
-    const template = path.join(root, templatePath);
-    const packagePath = `packages/${name}`;
+    const template = path.join(templatesDir(path), templateName);
+    const packagePath = `${PACKAGES_DIR}/${name}`;
     const target = path.join(root, packagePath);
 
     const templateManifest = path.join(template, "package.json");
     if (!(yield* orFail(fs.exists(templateManifest), `Failed to stat ${templateManifest}`))) {
-      return yield* new ScaffoldError({ message: `No template at ${templatePath}` });
+      return yield* new ScaffoldError({ message: `No template named "${templateName}"` });
     }
     if (yield* orFail(fs.exists(target), `Failed to stat ${packagePath}`)) {
       return yield* new ScaffoldError({ message: `${packagePath} already exists` });
@@ -230,7 +239,7 @@ export const createPackage = (
       return yield* new ScaffoldError({ message: `${templateManifest} has no "name" field` });
     }
 
-    yield* orFail(fs.copy(template, target), `Failed to copy ${templatePath}`);
+    yield* orFail(fs.copy(template, target), `Failed to copy the ${templateName} template`);
 
     const packageName = `@repo/${name}`;
     yield* prepareCopy(target, templatePackageName, packageName);

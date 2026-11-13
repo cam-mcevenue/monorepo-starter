@@ -2,7 +2,7 @@ packages:
   - apps/*
   - packages/*
   # Templates are workspace members so `vp check`/`lint`/`test` keep them valid.
-  - templates/*
+  - packages/cli/templates/*
   - scratchpad
 
 catalogMode: prefer

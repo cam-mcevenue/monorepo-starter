@@ -53,17 +53,19 @@ Vite+ docs are local at `node_modules/vite-plus/docs`, and its agent guidance at
 ## Layout
 
 ```
-apps/*            deployable applications
-packages/*        libraries, scope @repo/*
-packages/cli      this repo's dev CLI — tooling for working IN the repo, not a product
-templates/*       package templates `create-pkg` copies from
-templates/pkg-effect  the default Effect library template
-scratchpad        throwaway playground, outside the conventions
+apps/*                       deployable applications
+packages/*                   libraries, scope @repo/*
+packages/cli                 this repo's dev CLI, tooling for working IN the repo
+packages/cli/templates/*     package templates `pkg add` copies from
+packages/tsconfig            @repo/tsconfig, holds tsconfig.base.json
+scratchpad                   throwaway playground, outside the conventions
 ```
 
-Templates are workspace members, so `check`/`lint`/`test` run against them and they cannot rot.
-Adding a directory under `templates/` with a `package.json` is all it takes to make it an
-offered choice — the CLI reads the list from disk.
+Templates live inside `packages/cli` because they belong to it, and the CLI resolves them from
+its own location rather than from the repo root. They are still workspace members (via the
+`packages/cli/templates/*` glob), so `check`, `lint` and `test` run against them and a template
+that stops compiling fails the build. Adding a directory there with a `package.json` is all it
+takes to make it an offered choice, because the CLI reads the list from disk.
 
 Inside a package:
 
@@ -135,14 +137,23 @@ expected; delete what a given repo does not need.
 
 ## TypeScript config
 
-- `tsconfig.base.json` — the real settings, extended by every package
+- `packages/tsconfig/tsconfig.base.json` — the real settings, published as
+  `@repo/tsconfig/base.json`
 - `tsconfig.workspace.json` — solution file, references each package
-- `tsconfig.tests.json` — type-checks `{apps,packages}/*/{src,test}/**`
+- `tsconfig.tests.json` — type-checks `{apps,packages}/*/{src,test}/**` plus the templates
 - `tsconfig.json` — root solution, references the two above
 
-A new package extends `../../tsconfig.base.json` and needs an entry in
-`tsconfig.workspace.json`. `tsconfig.workspace.json` is JSONC — edit it as text; a
-`JSON.parse`/`stringify` round-trip deletes its comments.
+A new package extends `@repo/tsconfig/base.json`, declares `@repo/tsconfig` as a
+devDependency, and needs an entry in `tsconfig.workspace.json`. The specifier resolves the
+same at any depth, which is why a template four directories deep and a generated package two
+directories deep can share one file. Relative `../../` paths could not do that.
+
+`tsconfig.base.json` uses `${configDir}` for `outDir` and `rootDir`, so each package emits to
+its own `dist` and roots at its own `src` even though the settings come from `node_modules`.
+Keep it that way; a plain relative path there would resolve against the config package.
+
+`tsconfig.workspace.json` is JSONC — edit it as text, because a `JSON.parse`/`stringify`
+round-trip deletes its comments.
 
 ## Skills
 

@@ -59,14 +59,13 @@ const add = Command.make(
   {
     name: nameArgument,
     template: Flag.String("template").pipe(
-      Flag.withDescription("Template directory under templates/ (prompts when omitted)"),
+      Flag.withDescription("Template name (prompts when omitted)"),
       Flag.optional,
     ),
   },
   ({ name, template }) =>
     Effect.gen(function* () {
-      const root = yield* findRepoRoot(process.cwd());
-      const templates = yield* listTemplates(root);
+      const templates = yield* listTemplates();
 
       const chosenTemplate = Option.isSome(template)
         ? templates.includes(template.value)
@@ -74,13 +73,13 @@ const add = Command.make(
           : yield* new ScaffoldError({
               message: `Unknown template "${template.value}". Available: ${templates.join(", ")}`,
             })
-        : yield* promptChoice("Which template?", templates, "No templates found in templates/");
+        : yield* promptChoice("Which template?", templates, "No templates found");
 
       const chosenName = yield* resolveName(name, "Package name?");
 
       const { packageName, packagePath } = yield* createPackage(chosenName, chosenTemplate);
       yield* Console.log(
-        `Created ${packageName} at ${packagePath} from templates/${chosenTemplate}`,
+        `Created ${packageName} at ${packagePath} from the ${chosenTemplate} template`,
       );
       yield* Console.log("Next: run `vp install` to link it into the workspace");
     }),
