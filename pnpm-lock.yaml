@@ -188,16 +188,13 @@ catalogs:
     '@effect/sql-sqlite-node':
       specifier: 4.1.4
       version: 4.1.4
+    '@effect/vitest':
+      specifier: 4.1.4
+      version: 4.1.4
     effect:
       specifier: 4.1.4
       version: 4.1.4
   tooling:
-    '@cam-mcevenue/tsconfig':
-      specifier: github:cam-mcevenue/configs#path:/packages/tsconfig
-      version: https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/tsconfig
-    '@cam-mcevenue/vite-config':
-      specifier: github:cam-mcevenue/configs#path:/packages/vite
-      version: https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/vite
     '@effect/tsgo':
       specifier: 0.68.0
       version: 0.68.0
@@ -221,12 +218,6 @@ importers:
 
   .:
     devDependencies:
-      '@cam-mcevenue/tsconfig':
-        specifier: catalog:tooling
-        version: https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/tsconfig(typescript@7.0.2)
-      '@cam-mcevenue/vite-config':
-        specifier: catalog:tooling
-        version: https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/vite(@effect/tsgo@0.68.0)(@voidzero-dev/vite-plus-core@1.6.0(@types/node@26.6.6)(typescript@7.0.2))(typescript@7.0.2)(vite-plus@1.6.0(@types/node@26.6.6)(@vitest/ui@5.1.0)(typescript@7.0.2))
       '@effect/tsgo':
         specifier: catalog:tooling
         version: 0.68.0
@@ -242,6 +233,19 @@ importers:
       vite-plus:
         specifier: catalog:tooling
         version: 1.6.0(@types/node@26.6.6)(@vitest/ui@5.1.0)(typescript@7.0.2)
+
+  packages/cli:
+    dependencies:
+      '@effect/platform-node':
+        specifier: catalog:effect
+        version: 4.1.4(effect@4.1.4)(redis@6.3.1)
+      effect:
+        specifier: catalog:effect
+        version: 4.1.4
+    devDependencies:
+      '@effect/vitest':
+        specifier: catalog:effect
+        version: 4.1.4(effect@4.1.4)(vitest@5.1.0)
 
   scratchpad:
     dependencies:
@@ -273,6 +277,16 @@ importers:
         specifier: catalog:effect
         version: 4.1.4
 
+  templates/pkg-effect:
+    dependencies:
+      effect:
+        specifier: catalog:effect
+        version: 4.1.4
+    devDependencies:
+      '@effect/vitest':
+        specifier: catalog:effect
+        version: 4.1.4(effect@4.1.4)(vitest@5.1.0)
+
 packages:
 
   '@babel/code-frame@7.29.7':
@@ -289,21 +303,6 @@ packages:
 
   '@blazediff/core@1.10.0':
     resolution: {integrity: sha512-AOQff0zgR7cGsZL+4E7hVkmujoPUpm0J9xzWGWZj5wCjd3gmxESXAPfKyuzs93VdpQNFhHlBhfOjrcZ+XTERtQ==}
-
-  '@cam-mcevenue/tsconfig@https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/tsconfig':
-    resolution: {gitHosted: true, integrity: sha512-8l75oYb/o58QfqHL9x+vqhRoidB2+fhrFspgm2AErrAGAGuT9PlvJpzWdZqpHhRFxgJ3m6PosteUK4ZaCav2dw==, path: /packages/tsconfig, tarball: https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc}
-    version: 1.0.0
-    peerDependencies:
-      typescript: ^7.0.0
-
-  '@cam-mcevenue/vite-config@https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/vite':
-    resolution: {gitHosted: true, integrity: sha512-8l75oYb/o58QfqHL9x+vqhRoidB2+fhrFspgm2AErrAGAGuT9PlvJpzWdZqpHhRFxgJ3m6PosteUK4ZaCav2dw==, path: /packages/vite, tarball: https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc}
-    version: 1.0.0
-    peerDependencies:
-      '@effect/tsgo': ^0.68.0
-      typescript: ^7.0.0
-      vite: ^1.6.0
-      vite-plus: ^1.6.0
 
   '@effect/ai-anthropic@4.1.4':
     resolution: {integrity: sha512-VDcsyL3k76HhF7YqH8z0gQ0bUybX4ti5RHv3JadDXZvEgNpvUT3p4YBssvKR2HAGa7NXr9yfmFedRilhQM7tdQ==}
@@ -418,6 +417,12 @@ packages:
   '@effect/tsgo@0.68.0':
     resolution: {integrity: sha512-bEavhzNBDdmVFIHVXsd7DC9qr7Bgxq4xrdEHE1NcfJqv8i6dXsafdyJU3gjvb79YJ1sd409H3ray70fD+QY3DA==}
     hasBin: true
+
+  '@effect/vitest@4.1.4':
+    resolution: {integrity: sha512-AKpZ6zKihCRhY7hDbiQ2yp/krw+afIkxDRjFMwwzMiyhd0iYk0WaHa9J6GGC7TUF/C7HP2dZyMVq5xC0Qm/2/g==}
+    peerDependencies:
+      effect: ^4.1.4
+      vitest: '>=5.0.0 <6.0.0'
 
   '@jridgewell/resolve-uri@3.1.2':
     resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
@@ -1501,17 +1506,6 @@ snapshots:
 
   '@blazediff/core@1.10.0': {}
 
-  '@cam-mcevenue/tsconfig@https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/tsconfig(typescript@7.0.2)':
-    dependencies:
-      typescript: 7.0.2
-
-  '@cam-mcevenue/vite-config@https://codeload.github.com/cam-mcevenue/configs/tar.gz/8dbd572a7b78e39d30ca343ccb8cf3e6c0f6a6fc#path:/packages/vite(@effect/tsgo@0.68.0)(@voidzero-dev/vite-plus-core@1.6.0(@types/node@26.6.6)(typescript@7.0.2))(typescript@7.0.2)(vite-plus@1.6.0(@types/node@26.6.6)(@vitest/ui@5.1.0)(typescript@7.0.2))':
-    dependencies:
-      '@effect/tsgo': 0.68.0
-      typescript: 7.0.2
-      vite: '@voidzero-dev/vite-plus-core@1.6.0(@types/node@26.6.6)(typescript@7.0.2)'
-      vite-plus: 1.6.0(@types/node@26.6.6)(@vitest/ui@5.1.0)(typescript@7.0.2)
-
   '@effect/ai-anthropic@4.1.4(effect@4.1.4)':
     dependencies:
       effect: 4.1.4
@@ -1590,6 +1584,11 @@ snapshots:
       '@effect/tsgo-linux-x64': 0.68.0
       '@effect/tsgo-win32-arm64': 0.68.0
       '@effect/tsgo-win32-x64': 0.68.0
+
+  '@effect/vitest@4.1.4(effect@4.1.4)(vitest@5.1.0)':
+    dependencies:
+      effect: 4.1.4
+      vitest: 5.1.0(@types/node@26.6.6)(@vitest/browser-preview@5.1.0)(@vitest/ui@5.1.0)(@voidzero-dev/vite-plus-core@1.6.0(@types/node@26.6.6)(typescript@7.0.2))
 
   '@jridgewell/resolve-uri@3.1.2': {}
 

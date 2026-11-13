@@ -1,0 +1,21 @@
+{
+  "name": "@repo/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts",
+    "./internal/*": null,
+    "./index": null,
+    "./*/index": null
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:effect",
+    "effect": "catalog:effect"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:effect"
+  }
+}

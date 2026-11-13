@@ -18,5 +18,11 @@ export default defineConfig({
   },
   run: {
     cache: true,
+    tasks: {
+      // Interactive tasks must not be cached: the task runner captures output
+      // instead of attaching a TTY, so prompts print and then exit immediately.
+      cli: { command: "vpx packages/cli/src/bin.ts", cache: false },
+      skills: { command: "DISABLE_TELEMETRY=1 vpx skills@latest", cache: false },
+    },
   },
 });
