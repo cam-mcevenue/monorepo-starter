@@ -14,7 +14,6 @@
     "@effect/tsgo": "catalog:tooling",
     "@types/node": "catalog:tooling",
     "tsrs": "catalog:tooling",
-    "typescript": "catalog:tooling",
     "vite": "catalog:tooling",
     "vite-plus": "catalog:tooling"
   },

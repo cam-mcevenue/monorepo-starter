@@ -204,9 +204,6 @@ catalogs:
     tsrs:
       specifier: 0.24.0-ts7.1.0-beta
       version: 0.24.0-ts7.1.0-beta
-    typescript:
-      specifier: 7.0.2
-      version: 7.0.2
     vite:
       specifier: npm:@voidzero-dev/vite-plus-core@1.6.0
       version: 1.6.0
@@ -230,9 +227,6 @@ importers:
       tsrs:
         specifier: catalog:tooling
         version: 0.24.0-ts7.1.0-beta
-      typescript:
-        specifier: catalog:tooling
-        version: 7.0.2
       vite:
         specifier: catalog:tooling
         version: '@voidzero-dev/vite-plus-core@1.6.0(@types/node@26.6.6)(typescript@7.0.2)'
@@ -2339,6 +2333,7 @@ snapshots:
       '@typescript/typescript-sunos-x64': 7.0.2
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
+    optional: true
 
   undici-types@8.9.0: {}
 

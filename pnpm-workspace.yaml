@@ -31,7 +31,6 @@ catalogs:
     "@effect/tsgo": 0.68.0
     "@types/node": 26.6.6
     tsrs: 0.24.0-ts7.1.0-beta
-    typescript: 7.0.2
     vite: npm:@voidzero-dev/vite-plus-core@1.6.0
     vite-plus: 1.6.0
     vitest: 5.1.0

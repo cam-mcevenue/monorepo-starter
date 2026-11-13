@@ -11,7 +11,7 @@ name, and every name here collides with one, so the `r` selects yours.
 | Task | Read |
 | --- | --- |
 | Run checks, tests, formatting, the dev CLI, or add a script or task | [`commands.md`](./commands.md) |
-| Node or pnpm versions, installing, a platform install failure | [`toolchain.md`](./toolchain.md) |
+| Node, pnpm or TypeScript versions, switching tsrs back to tsgo, installing, a platform install failure | [`toolchain.md`](./toolchain.md) |
 | Configure a lint rule or an Effect diagnostic | [`effect-diagnostics.md`](./effect-diagnostics.md) |
 
 `vpr check` and `vpr test` are the gates. Run both, because a passing typecheck says nothing
