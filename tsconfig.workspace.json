@@ -1,9 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@cam-mcevenue/tsconfig/base.json",
+  "extends": "./tsconfig.base.json",
   "include": [],
   "references": [
     { "path": "scratchpad" }
-    //{ "path": "packages/effect" },
   ]
 }

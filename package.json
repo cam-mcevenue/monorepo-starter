@@ -11,8 +11,6 @@
     "test": "vp test"
   },
   "devDependencies": {
-    "@cam-mcevenue/tsconfig": "catalog:tooling",
-    "@cam-mcevenue/vite-config": "catalog:tooling",
     "@effect/tsgo": "catalog:tooling",
     "@types/node": "catalog:tooling",
     "typescript": "catalog:tooling",

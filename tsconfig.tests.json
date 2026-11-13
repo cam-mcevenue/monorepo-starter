@@ -1,5 +1,51 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "extends": "@cam-mcevenue/tsconfig/tests.json",
-  "references": [{ "path": "tsconfig.workspace.json" }]
+  "extends": "./tsconfig.base.json",
+  "include": [
+    // Tests import from `src`, and a composite project must list every file it
+    // pulls in, so the source globs belong here too.
+    "./apps/*/src/**/*.ts",
+    "./packages/*/src/**/*.ts",
+    "./templates/*/src/**/*.ts",
+    "./templates/*/test/**/*.ts",
+    "./templates/*/test/**/*.json",
+    "./apps/*/test/**/*.ts",
+    "./apps/*/test/**/*.json",
+    "./apps/**/test/**/*.ts",
+    "./apps/**/test/**/*.json",
+    "./packages/*/test/**/*.ts",
+    "./packages/*/test/**/*.json",
+    "./packages/**/test/**/*.ts",
+    "./packages/**/test/**/*.json"
+  ],
+  "exclude": ["**/node_modules/**", "**/dist/**"],
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "erasableSyntaxOnly": false,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      // These path aliases allow a project to load internal modules in tests and to use other workspace
+      // packages in tests that would otherwise be considered cyclic dependencies (e.g. loading
+      // `@effect/sql-sqlite-node` in the test suite of `@effect/platform-node`, which itself depends on
+      // `@effect/platform-node`). Fill in per-project, relative to that project's own root.
+    },
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "effectFn": ["untraced"],
+        "namespaceImportPackages": [],
+        "includeSuggestionsInTsc": false,
+        "ignoreEffectWarningsInTscExitCode": true,
+        "ignoreEffectErrorsInTscExitCode": false,
+        "diagnosticSeverity": {
+          "unknownInEffectCatch": "off",
+          "multipleEffectProvide": "off",
+          "unstableApiUsage": "off",
+          "effectFnOpportunity": "error"
+        }
+      }
+    ]
+  }
 }
