@@ -333,9 +333,16 @@ const listMembers = Effect.fnUntraced(function* (root: string) {
 });
 
 /** Read every member's manifest and build config, plus the fragments. */
-export const loadWorkspace = Effect.fnUntraced(function* (root: string) {
+export const loadWorkspace = Effect.fnUntraced(function* (givenRoot: string) {
+  const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const templates = templatesDir(path);
+  // pnpm ls reports real paths, so relate them to the real root: on macOS /tmp
+  // is a symlink to /private/tmp, and a repo can be opened through a symlink.
+  const root = yield* orFail(fs.realPath(givenRoot), `Failed to resolve ${givenRoot}`);
+  const templates = yield* orFail(
+    fs.realPath(templatesDir(path)),
+    "Failed to resolve the templates directory",
+  );
 
   const members: Array<Member> = [];
   for (const dir of yield* listMembers(root)) {
@@ -359,7 +366,7 @@ export const loadWorkspace = Effect.fnUntraced(function* (root: string) {
     members,
     fragments: {
       buildConfig: yield* orFail(
-        (yield* FileSystem.FileSystem).readFileString(buildConfigFragment),
+        fs.readFileString(buildConfigFragment),
         `Failed to read ${buildConfigFragment}`,
       ),
       manifest: yield* readJson(path.join(fragments, "package.public.json")),

@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { createPackage, removePackage } from "@repo/cli/internal/scaffold";
-import { makePublic, syncWorkspace } from "@repo/cli/internal/workspace";
+import { loadWorkspace, makePublic, syncWorkspace } from "@repo/cli/internal/workspace";
 
 /**
  * A throwaway workspace on disk, so these tests run the real `pnpm ls` and
@@ -80,6 +80,21 @@ describe("syncWorkspace", () => {
 
       const again = yield* run(syncWorkspace(repo.root, { check: true }));
       expect(again.findings).toEqual([]);
+    }),
+  );
+});
+
+describe("loadWorkspace through a symlinked root", () => {
+  // macOS's /tmp is a symlink to /private/tmp, and pnpm ls reports real paths.
+  it.effect("relates members to the real root, so dirs stay repo-relative", () =>
+    Effect.gen(function* () {
+      const repo = fixture({ "packages/foo/package.json": { name: "@acme/foo" } });
+      const link = `${repo.root}-link`;
+      fs.symlinkSync(repo.root, link);
+      fixtureRoots.push(link);
+
+      const snapshot = yield* run(loadWorkspace(link));
+      expect(snapshot.members.map((m) => m.dir).sort()).toEqual(["", "packages/foo"]);
     }),
   );
 });
