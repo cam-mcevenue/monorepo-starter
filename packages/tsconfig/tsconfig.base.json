@@ -29,20 +29,16 @@
     "skipLibCheck": true, // Skip type checking of third party libraries.
     "noErrorTruncation": true, // Do not truncate error messages.
     "types": [], // Disable automatic loading of `@types/*` packages.
+    // The language service supplies hovers, completions and refactors. Its
+    // diagnostics stay off so Oxlint reports Effect rules once rather than
+    // twice; severities live in the `lint` block of the root vite.config.ts.
     "plugins": [
       {
         "name": "@effect/language-service",
+        "diagnostics": false,
         "effectFn": ["untraced"],
-        //"namespaceImportPackages": ["effect", "@effect/*"],
-        "diagnosticSeverity": {
-          "globalErrorInEffectFailure": "off", // TODO: Check if we should fix the warnings this reports
-          "unstableApiUsage": "off",
-          "experimentalApiUsage": "off",
-          "effectFnOpportunity": "error"
-        },
-        "includeSuggestionsInTsc": false,
-        "ignoreEffectWarningsInTscExitCode": true,
-        "ignoreEffectErrorsInTscExitCode": false
+        // @effect/vitest is unstable in its entirety and every test uses it.
+        "allowedUnstableApis": ["@effect/vitest"]
       }
     ]
   }
