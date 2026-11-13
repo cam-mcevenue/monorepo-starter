@@ -1,0 +1,15 @@
+{
+  "files": [
+    "src/**/*.ts",
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.ts.map"
+  ],
+  "scripts": {
+    "build": "tsrs -b tsconfig.build.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

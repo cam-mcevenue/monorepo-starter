@@ -20,6 +20,9 @@ There are three catalogs. `effect` holds Effect and its ecosystem, `infra` holds
 its providers, `tooling` holds the toolchain. Internal packages use `workspace:*` instead and
 appear in no catalog.
 
+A workspace dependency of a public package is also a build reference. After adding or removing
+one, run `vpr cli pkg sync`; `vpr check` fails until you do.
+
 `catalogMode: prefer` means pnpm reaches for a catalog entry when one exists.
 
 ## Over-stocked on purpose

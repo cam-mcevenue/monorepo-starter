@@ -3,14 +3,17 @@
 The dev CLI owns both directions:
 
 ```sh
-vpr cli pkg add                            # prompts for template, then name
-vpr cli pkg add my-package --template pkg-effect
+vpr cli pkg add                            # prompts for template, name, then type
+vpr cli pkg add my-package --template pkg-effect --private
 vp install                                 # link it into the workspace
 
 vpr cli pkg rm                             # prompts for which package
 vpr cli pkg rm my-package --yes            # skip the confirmation
 vp install
 ```
+
+`--public` makes the new package publishable; [`registration.md`](./registration.md) covers
+what that adds.
 
 `pkg add` does four things a hand-built package misses:
 
@@ -22,7 +25,10 @@ vp install
 4. Repoints the copy's `tsconfig.json` `extends` from the template's depth to
    `packages/<name>`.
 
-`pkg rm` deletes the directory, behind a confirmation prompt that defaults to no.
+`pkg rm` deletes the directory, behind a confirmation prompt that defaults to no. It refuses
+while any workspace member lists the package in `dependencies`, `peerDependencies` or
+`devDependencies`, and names each one to edit first. Removing a public package leaves any
+release on npm untouched.
 
 A template copied by hand keeps `../../../../tsconfig.base.json`, which from `packages/<name>`
 points above the repo, and `vpr check` fails with `typescript(tsconfig-error)`.

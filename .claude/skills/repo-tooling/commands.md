@@ -48,7 +48,7 @@ so moving a script to a task means deleting the script.
 
 ## Verifying work
 
-`vpr check` runs formatting, linting and typechecking. `vpr test` runs the tests. Those two are
+`vpr check` runs formatting, linting, typechecking and `vpr cli pkg sync --check`. `vpr test` runs the tests. Those two are
 the only gates in this repo, since there is no CI.
 
 Run both. A passing typecheck says nothing about whether the code runs, and `vpr test` is what

@@ -20,6 +20,7 @@
           "effect/FileSystem",
           "effect/Path",
           "effect/PlatformError",
+          "effect/process",
           "@effect/platform-node"
         ]
       }

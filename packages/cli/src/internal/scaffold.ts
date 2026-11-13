@@ -1,4 +1,13 @@
 import { Data, Effect, FileSystem, Path, type PlatformError } from "effect";
+import type { ChildProcessSpawner } from "effect/process";
+import {
+  dependentsOf,
+  ensureNpmScope,
+  loadWorkspace,
+  makePublic,
+  syncWorkspace,
+  type WorkspaceError,
+} from "./workspace.ts";
 
 /**
  * Internal implementation of `pkg add` and `pkg rm`. The command module owns
@@ -167,7 +176,18 @@ export const retargetExtends = (
 export interface CreatePackageResult {
   readonly packageName: string;
   readonly packagePath: string;
+  /** Repo-relative files written as JSON, for the caller to format. */
+  readonly written: ReadonlyArray<string>;
 }
+
+export interface RemovePackageResult extends CreatePackageResult {
+  /** A public package may also be on npm, which removing it here leaves untouched. */
+  readonly wasPublic: boolean;
+}
+
+export type Visibility = "public" | "private";
+
+type Services = FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner;
 
 /** Shared so the CLI can reject a bad name at the prompt as well as after it. */
 export const nameHint = 'use lowercase kebab-case, e.g. "my-package"';
@@ -179,17 +199,22 @@ export const validateName = (name: string): Effect.Effect<string, ScaffoldError>
         new ScaffoldError({ message: `"${name}" is not a valid package name — ${nameHint}` }),
       );
 
+/**
+ * Copy a template to `packages/<name>`. A public package is then made public
+ * exactly as `pkg make-public` would, so both paths share one implementation.
+ */
 export const createPackage = (
+  root: string,
   name: string,
   templateName: string,
-): Effect.Effect<CreatePackageResult, ScaffoldError, FileSystem.FileSystem | Path.Path> =>
+  visibility: Visibility,
+): Effect.Effect<CreatePackageResult, ScaffoldError | WorkspaceError, Services> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
     yield* validateName(name);
 
-    const root = yield* findRepoRoot(process.cwd());
     const template = path.join(templatesDir(path), templateName);
     const packagePath = `${PACKAGES_DIR}/${name}`;
     const target = path.join(root, packagePath);
@@ -200,6 +225,9 @@ export const createPackage = (
     }
     if (yield* orFail(fs.exists(target), `Failed to stat ${packagePath}`)) {
       return yield* new ScaffoldError({ message: `${packagePath} already exists` });
+    }
+    if (visibility === "public") {
+      yield* ensureNpmScope(root);
     }
 
     // The template's own package name is the string to repoint, so templates are
@@ -230,16 +258,26 @@ export const createPackage = (
       );
     }
 
-    return { packageName, packagePath };
+    if (visibility === "public") {
+      const { to, written } = yield* makePublic(root, name);
+      return { packageName: to, packagePath, written };
+    }
+    return { packageName, packagePath, written: [] };
   });
 
 /**
- * The reverse of `createPackage`: delete the directory. Nothing here prompts —
- * the CLI owns confirmation.
+ * Everything `pkg rm` refuses on, checked without deleting anything, so the CLI
+ * can refuse before it asks for confirmation: an invalid or protected name, a
+ * missing directory, or a workspace member that still depends on the package.
  */
-export const removePackage = (
+export const checkRemovable = (
+  root: string,
   name: string,
-): Effect.Effect<CreatePackageResult, ScaffoldError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<
+  { readonly packageName: string; readonly packagePath: string; readonly wasPublic: boolean },
+  ScaffoldError | WorkspaceError,
+  Services
+> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -252,7 +290,6 @@ export const removePackage = (
       });
     }
 
-    const root = yield* findRepoRoot(process.cwd());
     const packagePath = `${PACKAGES_DIR}/${name}`;
     const target = path.join(root, packagePath);
 
@@ -267,10 +304,35 @@ export const removePackage = (
     );
     const packageName = /"name"\s*:\s*"([^"]+)"/.exec(manifest)?.[1] ?? `@repo/${name}`;
 
+    const dependents = dependentsOf(yield* loadWorkspace(root), packageName, path);
+    if (dependents.length > 0) {
+      return yield* new ScaffoldError({
+        message: `${packageName} is still a dependency. Remove it from these first:\n${dependents.map((d) => `  ${d}`).join("\n")}`,
+      });
+    }
+
+    const wasPublic = !/"private"\s*:\s*true/.test(manifest);
+    return { packageName, packagePath, wasPublic };
+  });
+
+/**
+ * The reverse of `createPackage`: delete the directory once `checkRemovable`
+ * passes, then sync. Nothing here prompts — the CLI owns confirmation.
+ */
+export const removePackage = (
+  root: string,
+  name: string,
+): Effect.Effect<RemovePackageResult, ScaffoldError | WorkspaceError, Services> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const { packageName, packagePath, wasPublic } = yield* checkRemovable(root, name);
+
     yield* orFail(
-      fs.remove(target, { recursive: true, force: true }),
+      fs.remove(path.join(root, packagePath), { recursive: true, force: true }),
       `Failed to remove ${packagePath}`,
     );
 
-    return { packageName, packagePath };
+    const { written } = yield* syncWorkspace(root, { check: false });
+    return { packageName, packagePath, written, wasPublic };
   });

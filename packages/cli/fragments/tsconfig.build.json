@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // Emits a publishable package. `pkg sync` owns the `references` array: one
+  // entry per public workspace package in dependencies or peerDependencies.
+  "extends": "./tsconfig.json",
+  "include": ["src"],
+  "compilerOptions": {
+    "noEmit": false,
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // Inside dist, so deleting the build deletes its incremental cache too.
+    "tsBuildInfoFile": "dist/tsconfig.build.tsbuildinfo"
+  },
+  "references": []
+}
