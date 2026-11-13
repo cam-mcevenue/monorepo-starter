@@ -12,7 +12,7 @@ what every generated repo inherits.
 | `apps/*` | deployable applications |
 | `packages/*` | libraries, scope `@repo/*` |
 | `packages/cli` | the dev CLI, and the templates `pkg add` copies |
-| `packages/tsconfig` | `@repo/tsconfig`, the shared compiler settings |
+| `tsconfig.base.json` | the shared compiler rules every project extends by relative path |
 | `scratchpad/` | throwaway playground, outside the conventions |
 
 ## Finding the rest

@@ -1,5 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "include": [],
-  "references": [{ "path": "tsconfig.workspace.json" }, { "path": "tsconfig.tests.json" }]
+  // Root-level files only. Every package and app has its own tsconfig.json,
+  // which the editor and `vpr check` pick up as each file's nearest config.
+  "extends": "./tsconfig.base.json",
+  "include": ["*.ts"],
+  "compilerOptions": {
+    "types": ["node"]
+  }
 }
