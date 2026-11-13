@@ -1,6 +1,6 @@
 import { defineConfig } from "vite-plus";
 import * as path from "node:path";
-import { recommended } from "@effect/tsgo/oxlint-presets";
+import lint from "./oxlint.config.ts";
 
 export default defineConfig({
   resolve: {
@@ -14,16 +14,7 @@ export default defineConfig({
   fmt: {
     ignorePatterns: ["**/*.md"],
   },
-  lint: {
-    extends: [recommended],
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
-    rules: {
-      "vite-plus/prefer-vite-plus-imports": "error",
-      // Owned here rather than in tsconfig: this is what vpr check reads.
-      "effecttsgo/effect-fn-opportunity": "error",
-    },
-    options: { typeAware: true, typeCheck: true },
-  },
+  lint,
   run: {
     cache: true,
     tasks: {

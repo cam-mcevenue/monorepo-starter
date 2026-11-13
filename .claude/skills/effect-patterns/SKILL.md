@@ -9,7 +9,7 @@ description: Effect code patterns in this repo. Use when modelling errors, writi
 | --- | --- |
 | Model errors, or a lint rule reports a leaked library error | [`errors.md`](./errors.md) |
 
-`effecttsgo/effect-fn-opportunity` is `"error"` in `vite.config.ts`, so a function returning
+`effecttsgo/effect-fn-opportunity` is `"error"` in `oxlint.config.ts`, so a function returning
 `Effect.gen` is written `Effect.fnUntraced(function* () {})` or the build fails.
 
 `effecttsgo/unstable-api-usage` stays at `"warn"`. Effect 4 declares much of its own surface

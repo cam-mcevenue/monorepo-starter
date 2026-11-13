@@ -1,8 +1,8 @@
-# Effect diagnostics: tsconfig or vite.config.ts
+# Effect diagnostics: tsconfig or oxlint.config.ts
 
 This repo combines two things. The `plugins` block in `tsconfig.effect.json` comes from
-Effect's own repo, which runs plain `tsc`. The `lint` block in `vite.config.ts` comes from Vite+, which
-runs Oxlint. Both involve the same Effect language service, and each file owns a different part
+Effect's own repo, which runs plain `tsc`. `oxlint.config.ts` configures Oxlint, which
+`vpr check` runs through Vite+. Both involve the same Effect language service, and each file owns a different part
 of it.
 
 ## The split
@@ -13,10 +13,27 @@ this codebase is written. They are facts the rules need to do their job, not pol
 whole repo shares goes in `tsconfig.effect.json`; a fact one package needs goes in that
 package's own `tsconfig.json`, which merges with the base.
 
-**`vite.config.ts` decides which rules run and how loudly.** Severities, the preset to extend,
+**`oxlint.config.ts` decides which rules run and how loudly.** Severities, the preset to extend,
 and per-path exceptions through `lint.overrides`.
 
-Put a severity in `vite.config.ts`. Put a project fact in the tsconfig plugin block.
+Put a severity in `oxlint.config.ts`. Put a project fact in the tsconfig plugin block.
+
+## One lint config for the CLI and the editor
+
+`vite.config.ts` imports its `lint` block from `oxlint.config.ts`, so `vpr check` and the editor
+read the same rules. The editor needs the separate file because it runs plain Oxlint, which
+cannot read `vite.config.ts`. Measured: plain Oxlint with the rules only in `vite.config.ts`
+reports nothing and exits 0, and `oxlint -c vite.config.ts` fails with
+`unknown field 'resolve'`.
+
+The editor also needs the Effect-patched Oxlint binding. `.zed/settings.json` starts the
+`oxlint` language server as `node_modules/.bin/effect-tsgo oxlint --lsp`, the same wrapper the
+scripts use. Started as plain `oxlint --lsp`, it fails to load the config with
+`Unknown plugin: 'effecttsgo'`. Nothing in `node_modules` is patched.
+
+`oxlint.config.ts` types itself with `import type { OxlintConfig } from "vite-plus/lint"`.
+Importing `defineConfig` from `oxlint` breaks the editor, because `oxlint` is only a dependency
+of `vite-plus` and the config file cannot resolve it.
 
 ## Why diagnostics are off in the plugin
 
@@ -83,8 +100,8 @@ The same pattern exists for neighbouring rules: `allowedExperimentalApis` for
 Facts scope per package. Put the option in that package's own `tsconfig.json`, which merges
 with the base, and no path pattern is involved. `packages/cli/tsconfig.json` does this.
 
-Severities scope by path, through `lint.overrides` with a `files` glob in the **root**
-`vite.config.ts`. Nothing in this repo needs one today, because the allowlists handle the only
+Severities scope by path, through `overrides` with a `files` glob in the root
+`oxlint.config.ts`. Nothing in this repo needs one today, because the allowlists handle the only
 case that came up.
 
 A `lint` block in a package's own `vite.config.ts` does not work. Vite+ ignores nested lint
@@ -98,7 +115,7 @@ fails silently. The package's own tsconfig avoids the problem entirely.
 
 ## Current settings
 
-`vite.config.ts` extends the `recommended` preset, which carries all 98 `effecttsgo` rules and
+`oxlint.config.ts` extends the `recommended` preset, which carries all 98 `effecttsgo` rules and
 enables Oxlint's type-aware mode. On top of it:
 
 - `effecttsgo/effect-fn-opportunity` raised to `"error"`, so the form this repo uses is enforced
