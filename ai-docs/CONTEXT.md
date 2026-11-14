@@ -4,8 +4,8 @@ Domain documentation: how to accomplish the tasks this project exists for. One d
 topic under `ai-docs/src/`. This file is the map: find the topic, read the document, stop.
 
 Repo mechanics live elsewhere. Commands, package work and code patterns are documented beside
-the skills that disclose them, in `.agents/skills/<name>/` (linked from `.claude/skills`), so
-nothing here competes with them.
+the skills that disclose them, in `.agents/skills/<name>/`, so nothing here competes with them.
+`.claude/skills` is a symlink to `.agents/skills`, so Claude Code reads the same files.
 
 To place a document, swap one thing and see what survives. Change the business this repo serves
 and keep the tooling: whatever is still true is repo mechanics, so it belongs with a skill.
