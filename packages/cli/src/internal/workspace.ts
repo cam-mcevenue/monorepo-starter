@@ -1,5 +1,27 @@
-import { Data, Effect, FileSystem, Path, type PlatformError } from "effect";
+import { Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
+import { RepoPath, type PackageName } from "../Model.ts";
+import {
+  AlreadyPublic,
+  DependsOnPrivate,
+  fileSystemFailure,
+  type FileSystemFailure,
+  MissingName,
+  PackageNotFound,
+  ProcessFailure,
+  ScopeUnset,
+  UnexpectedOutput,
+} from "../PackageError.ts";
+import {
+  ALL_DEPENDENCY_FIELDS,
+  BUILD_DEPENDENCY_FIELDS,
+  decodeText,
+  dependencyNames,
+  type JsonObject,
+  type Manifest,
+  serialize,
+  withPublishFields,
+} from "./manifest.ts";
 
 /**
  * The publishable-package rules. A package is public when its manifest has no
@@ -8,29 +30,14 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
  * operations below load the workspace from disk, plan, and write.
  */
 
-export class WorkspaceError extends Data.TaggedError("WorkspaceError")<{
-  readonly message: string;
-}> {}
-
-/** Collapse a library failure into a `WorkspaceError` naming the step. */
-const orFail = <A>(
-  effect: Effect.Effect<A, PlatformError.PlatformError>,
-  message: string,
-): Effect.Effect<A, WorkspaceError> =>
-  effect.pipe(
-    Effect.mapError((cause) => new WorkspaceError({ message: `${message}: ${cause.message}` })),
-  );
-
-export type Json = null | boolean | number | string | ReadonlyArray<Json> | JsonObject;
-export interface JsonObject {
-  readonly [key: string]: Json;
-}
-
 export interface Member {
-  /** Repo-relative directory, `""` for the workspace root. */
-  readonly dir: string;
+  /** `""` for the workspace root. */
+  readonly dir: RepoPath;
   readonly kind: "root" | "template" | "package";
-  readonly manifest: JsonObject;
+  /** The manifest's exact contents. */
+  readonly json: JsonObject;
+  /** The fields of `json` the CLI reads. */
+  readonly manifest: Manifest;
   /** Raw `tsconfig.build.json` text, when the file exists. */
   readonly buildConfig: string | undefined;
 }
@@ -46,14 +53,13 @@ export interface Snapshot {
 }
 
 export interface FileEdit {
-  /** Repo-relative file path. */
-  readonly path: string;
+  readonly path: RepoPath;
   readonly contents: string;
 }
 
 export interface Finding {
-  /** Repo-relative path of the file the finding is about. */
-  readonly path: string;
+  /** The file the finding is about. */
+  readonly path: RepoPath;
   readonly problem: string;
   /** `pkg sync` repairs it; otherwise it needs a decision made by hand. */
   readonly fixable: boolean;
@@ -66,77 +72,13 @@ export interface SyncPlan {
 
 type PathOps = Pick<Path.Path, "join" | "relative">;
 
-const isObject = (value: Json | undefined): value is JsonObject =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const repoPath = (path: PathOps, ...segments: ReadonlyArray<string>) =>
+  RepoPath.make(path.join(...segments));
 
-/** `./src/X.ts` → `./dist/X.js`, recursing into condition objects. */
-const toPublished = (target: Json): Json => {
-  if (typeof target === "string") {
-    return target.replace(/^\.\/src\//, "./dist/").replace(/\.ts$/, ".js");
-  }
-  if (isObject(target)) {
-    return Object.fromEntries(
-      Object.entries(target).map(([key, value]) => [key, toPublished(value)]),
-    );
-  }
-  return target;
-};
-
-const serialize = (value: Json) => `${JSON.stringify(value, null, 2)}\n`;
-
-const MANIFEST_EXPORT = "./package.json";
-
-/** Tools read a published manifest by name, so the export always leads the map. */
-const withManifestExport = (exports: Json | undefined): JsonObject => {
-  const map = isObject(exports) ? exports : {};
-  return MANIFEST_EXPORT in map ? map : { [MANIFEST_EXPORT]: MANIFEST_EXPORT, ...map };
-};
-
-/**
- * Deep-merge the fragment into a manifest. Fragment values win, keys keep the
- * manifest's order with new ones appended, and `files` is a union so a package
- * can ship extras beyond the fragment's required entries.
- */
-const mergeFragment = (target: JsonObject, fragment: JsonObject, atRoot: boolean): JsonObject => {
-  const merged: Record<string, Json> = { ...target };
-  for (const [key, value] of Object.entries(fragment)) {
-    const existing = target[key];
-    if (atRoot && key === "files" && Array.isArray(value)) {
-      const current = Array.isArray(existing) ? existing : [];
-      merged[key] = [...current, ...value.filter((entry) => !current.includes(entry))];
-    } else if (isObject(value) && isObject(existing)) {
-      merged[key] = mergeFragment(existing, value, false);
-    } else {
-      merged[key] = value;
-    }
-  }
-  return merged;
-};
-
-const syncManifest = (member: Member, fragment: JsonObject): JsonObject => {
-  const merged = mergeFragment(member.manifest, fragment, true);
-  const exports = withManifestExport(merged["exports"]);
-  const publishConfig = isObject(merged["publishConfig"]) ? merged["publishConfig"] : {};
-  return {
-    ...merged,
-    exports,
-    publishConfig: { ...publishConfig, exports: toPublished(exports) },
-  };
-};
-
-const isPrivate = (member: Member) => member.manifest["private"] === true;
+const isPrivate = (member: Member) => member.manifest.private === true;
 
 const BUILD_CONFIG = "tsconfig.build.json";
 const REFERENCES = /"references"\s*:\s*\[[^\]]*\]/;
-
-/** Fields whose workspace entries the build needs: devDependencies only reach tests. */
-const BUILD_DEPENDENCY_FIELDS = ["dependencies", "peerDependencies"];
-
-const dependencyNames = (manifest: JsonObject, fields: ReadonlyArray<string>) =>
-  fields.flatMap((field) => {
-    const deps = manifest[field];
-    return isObject(deps) ? Object.keys(deps) : [];
-  });
 
 const referencesIn = (buildConfig: string): ReadonlyArray<string> | undefined => {
   const match = REFERENCES.exec(buildConfig);
@@ -159,8 +101,6 @@ const spliceReferences = (buildConfig: string, paths: ReadonlyArray<string>) =>
     ? buildConfig.replace(REFERENCES, renderReferences(paths))
     : buildConfig.replace("{", `{\n  ${renderReferences(paths)},`);
 
-const ALL_DEPENDENCY_FIELDS = ["dependencies", "peerDependencies", "devDependencies"];
-
 /** Every `<member>/package.json (<field>)` that lists `name`, in any dependency field. */
 export const dependentsOf = (
   snapshot: Snapshot,
@@ -168,29 +108,18 @@ export const dependentsOf = (
   path: PathOps,
 ): ReadonlyArray<string> =>
   snapshot.members.flatMap((member) =>
-    ALL_DEPENDENCY_FIELDS.filter((field) => {
-      const deps = member.manifest[field];
-      return isObject(deps) && name in deps;
-    }).map((field) => `${path.join(member.dir, "package.json")} (${field})`),
+    ALL_DEPENDENCY_FIELDS.filter((field) => name in (member.manifest[field] ?? {})).map(
+      (field) => `${path.join(member.dir, "package.json")} (${field})`,
+    ),
   );
 
 /** The npm scope public packages publish under, from the root manifest's `repo.npmScope`. */
-export const npmScope = (snapshot: Snapshot): string | undefined => {
-  const root = snapshot.members.find((member) => member.kind === "root");
-  const repo = root?.manifest["repo"];
-  const scope = isObject(repo) ? repo["npmScope"] : undefined;
-  return typeof scope === "string" ? scope : undefined;
-};
+export const npmScope = (snapshot: Snapshot): string | undefined =>
+  snapshot.members.find((member) => member.kind === "root")?.manifest.repo?.npmScope;
 
-const requireScope = (snapshot: Snapshot): Effect.Effect<string, WorkspaceError> => {
+const requireScope = (snapshot: Snapshot): Effect.Effect<string, ScopeUnset> => {
   const scope = npmScope(snapshot);
-  return scope === undefined
-    ? Effect.fail(
-        new WorkspaceError({
-          message: `Set the npm scope first: add "repo": { "npmScope": "@your-scope" } to the root package.json`,
-        }),
-      )
-    : Effect.succeed(scope);
+  return scope === undefined ? Effect.fail(new ScopeUnset()) : Effect.succeed(scope);
 };
 
 /** Fail early when a public package could not be named, before anything is written. */
@@ -206,14 +135,14 @@ const privateLeftovers = (member: Member, path: PathOps): ReadonlyArray<Finding>
   const advice = "delete it or make the package public";
   if (member.buildConfig !== undefined) {
     leftovers.push({
-      path: path.join(member.dir, BUILD_CONFIG),
+      path: repoPath(path, member.dir, BUILD_CONFIG),
       problem: `private package has a build config; ${advice}`,
       fixable: false,
     });
   }
-  if ("publishConfig" in member.manifest) {
+  if (member.manifest.publishConfig !== undefined) {
     leftovers.push({
-      path: path.join(member.dir, "package.json"),
+      path: repoPath(path, member.dir, "package.json"),
       problem: `private package has publishConfig; ${advice}`,
       fixable: false,
     });
@@ -223,10 +152,9 @@ const privateLeftovers = (member: Member, path: PathOps): ReadonlyArray<Finding>
 
 export const planSync = (snapshot: Snapshot, path: PathOps): SyncPlan => {
   const byName = new Map(
-    snapshot.members.flatMap((member) => {
-      const name = member.manifest["name"];
-      return typeof name === "string" ? [[name, member] as const] : [];
-    }),
+    snapshot.members.flatMap((member) =>
+      member.manifest.name === undefined ? [] : [[member.manifest.name, member] as const],
+    ),
   );
   const edits: Array<FileEdit> = [];
   const findings: Array<Finding> = [];
@@ -240,10 +168,10 @@ export const planSync = (snapshot: Snapshot, path: PathOps): SyncPlan => {
     }
     // Compared by value: the formatter owns layout, so text differences are not drift.
     // Key order is safe too: the merge keeps every existing key where it was.
-    const manifestPath = path.join(member.dir, "package.json");
-    const manifest = syncManifest(member, snapshot.fragments.manifest);
-    if (JSON.stringify(manifest) !== JSON.stringify(member.manifest)) {
-      edits.push({ path: manifestPath, contents: serialize(manifest) });
+    const manifestPath = repoPath(path, member.dir, "package.json");
+    const json = withPublishFields(member.json, snapshot.fragments.manifest);
+    if (JSON.stringify(json) !== JSON.stringify(member.json)) {
+      edits.push({ path: manifestPath, contents: serialize(json) });
       findings.push({ path: manifestPath, problem: "package.json is out of sync", fixable: true });
     }
 
@@ -264,10 +192,9 @@ export const planSync = (snapshot: Snapshot, path: PathOps): SyncPlan => {
     }
     const references = workspaceDeps
       .filter(({ dependency }) => !isPrivate(dependency))
-      .map(({ dependency }) => dependency)
-      .map((dependency) => path.join(path.relative(member.dir, dependency.dir), BUILD_CONFIG))
+      .map(({ dependency }) => path.join(path.relative(member.dir, dependency.dir), BUILD_CONFIG))
       .sort();
-    const buildConfigPath = path.join(member.dir, BUILD_CONFIG);
+    const buildConfigPath = repoPath(path, member.dir, BUILD_CONFIG);
     const buildConfig = member.buildConfig ?? snapshot.fragments.buildConfig;
     const referencesStale =
       JSON.stringify(referencesIn(buildConfig)) !== JSON.stringify(references);
@@ -285,50 +212,45 @@ export const planSync = (snapshot: Snapshot, path: PathOps): SyncPlan => {
   }
   const anyPublic = snapshot.members.some((m) => m.kind !== "root" && !isPrivate(m));
   if (anyPublic && npmScope(snapshot) === undefined) {
-    findings.push({ path: "package.json", problem: NPM_SCOPE_UNSET, fixable: false });
+    findings.push({
+      path: RepoPath.make("package.json"),
+      problem: NPM_SCOPE_UNSET,
+      fixable: false,
+    });
   }
   return { edits, findings };
 };
 
 /** Fragments ship inside the CLI package, beside the templates. */
 const fragmentsDir = (path: Path.Path) => path.resolve(import.meta.dirname, "../../fragments");
-const templatesDir = (path: Path.Path) => path.resolve(import.meta.dirname, "../../templates");
+export const templatesDir = (path: Path.Path) =>
+  path.resolve(import.meta.dirname, "../../templates");
 
-const parseJson = (text: string, file: string): Effect.Effect<JsonObject, WorkspaceError> =>
-  Effect.try({
-    try: () => JSON.parse(text) as JsonObject,
-    catch: () => new WorkspaceError({ message: `${file} is not valid JSON` }),
-  });
-
-const readJson = Effect.fnUntraced(function* (file: string) {
+const readManifest = Effect.fnUntraced(function* (file: string) {
   const fs = yield* FileSystem.FileSystem;
-  return yield* parseJson(yield* orFail(fs.readFileString(file), `Failed to read ${file}`), file);
+  const text = yield* fs.readFileString(file).pipe(fileSystemFailure("read", file));
+  return yield* decodeText(text, file);
 });
 
 const readIfExists = Effect.fnUntraced(function* (file: string) {
   const fs = yield* FileSystem.FileSystem;
-  return (yield* orFail(fs.exists(file), `Failed to stat ${file}`))
-    ? yield* orFail(fs.readFileString(file), `Failed to read ${file}`)
+  return (yield* fs.exists(file).pipe(fileSystemFailure("stat", file)))
+    ? yield* fs.readFileString(file).pipe(fileSystemFailure("read", file))
     : undefined;
 });
 
-interface PnpmProject {
-  readonly path: string;
-}
+const PnpmProjects = Schema.fromJsonString(Schema.Array(Schema.Struct({ path: Schema.String })));
 
 /** Workspace members as pnpm itself resolves the globs in pnpm-workspace.yaml. */
 const listMembers = Effect.fnUntraced(function* (root: string) {
+  const command = "pnpm ls -r --depth -1 --json";
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const output = yield* orFail(
-    spawner.string(
-      ChildProcess.make("pnpm", ["ls", "-r", "--depth", "-1", "--json"], { cwd: root }),
-    ),
-    "Failed to list workspace members with pnpm ls",
+  const output = yield* spawner
+    .string(ChildProcess.make("pnpm", ["ls", "-r", "--depth", "-1", "--json"], { cwd: root }))
+    .pipe(Effect.mapError((cause) => new ProcessFailure({ command, cause })));
+  const projects = yield* Schema.decodeEffect(PnpmProjects)(output).pipe(
+    Effect.mapError(() => new UnexpectedOutput({ command, output })),
   );
-  const projects = yield* Effect.try({
-    try: () => JSON.parse(output) as ReadonlyArray<PnpmProject>,
-    catch: () => new WorkspaceError({ message: `pnpm ls printed unexpected output: ${output}` }),
-  });
   return projects.map((project) => project.path);
 });
 
@@ -338,24 +260,25 @@ export const loadWorkspace = Effect.fnUntraced(function* (givenRoot: string) {
   const path = yield* Path.Path;
   // pnpm ls reports real paths, so relate them to the real root: on macOS /tmp
   // is a symlink to /private/tmp, and a repo can be opened through a symlink.
-  const root = yield* orFail(fs.realPath(givenRoot), `Failed to resolve ${givenRoot}`);
-  const templates = yield* orFail(
-    fs.realPath(templatesDir(path)),
-    "Failed to resolve the templates directory",
-  );
+  const root = yield* fs.realPath(givenRoot).pipe(fileSystemFailure("resolve", givenRoot));
+  const templates = yield* fs
+    .realPath(templatesDir(path))
+    .pipe(fileSystemFailure("resolve", templatesDir(path)));
 
   const members: Array<Member> = [];
   for (const dir of yield* listMembers(root)) {
     const relative = path.relative(root, dir);
+    const { json, manifest } = yield* readManifest(path.join(dir, "package.json"));
     members.push({
-      dir: relative,
+      dir: RepoPath.make(relative),
       kind:
         relative === ""
           ? "root"
           : path.relative(templates, dir).startsWith("..")
             ? "package"
             : "template",
-      manifest: yield* readJson(path.join(dir, "package.json")),
+      json,
+      manifest,
       buildConfig: yield* readIfExists(path.join(dir, BUILD_CONFIG)),
     });
   }
@@ -365,11 +288,10 @@ export const loadWorkspace = Effect.fnUntraced(function* (givenRoot: string) {
   const snapshot: Snapshot = {
     members,
     fragments: {
-      buildConfig: yield* orFail(
-        fs.readFileString(buildConfigFragment),
-        `Failed to read ${buildConfigFragment}`,
-      ),
-      manifest: yield* readJson(path.join(fragments, "package.public.json")),
+      buildConfig: yield* fs
+        .readFileString(buildConfigFragment)
+        .pipe(fileSystemFailure("read", buildConfigFragment)),
+      manifest: (yield* readManifest(path.join(fragments, "package.public.json"))).json,
     },
   };
   return snapshot;
@@ -377,8 +299,8 @@ export const loadWorkspace = Effect.fnUntraced(function* (givenRoot: string) {
 
 export interface SyncResult {
   readonly findings: ReadonlyArray<Finding>;
-  /** Repo-relative paths written, empty under `check`. */
-  readonly written: ReadonlyArray<string>;
+  /** Paths written, empty under `check`. */
+  readonly written: ReadonlyArray<RepoPath>;
 }
 
 /** Plan against the workspace on disk and, unless checking, apply the edits. */
@@ -393,8 +315,9 @@ export const syncWorkspace = Effect.fnUntraced(function* (
     return { findings: plan.findings, written: [] } satisfies SyncResult;
   }
   for (const edit of plan.edits) {
-    const full = path.join(root, edit.path);
-    yield* orFail(fs.writeFileString(full, edit.contents), `Failed to write ${edit.path}`);
+    yield* fs
+      .writeFileString(path.join(root, edit.path), edit.contents)
+      .pipe(fileSystemFailure("write", edit.path));
   }
   return {
     // What sync just repaired is no longer a finding; what needs a decision still is.
@@ -411,32 +334,33 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$
 
 /** Rewrite a package name in every source and manifest under `dir`, returning files changed. */
 const renameIn = (
+  root: string,
   dir: string,
   pattern: RegExp,
   to: string,
-): Effect.Effect<ReadonlyArray<string>, WorkspaceError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<ReadonlyArray<RepoPath>, FileSystemFailure, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const changed: Array<string> = [];
-    for (const entry of yield* orFail(fs.readDirectory(dir), `Failed to read ${dir}`)) {
+    const changed: Array<RepoPath> = [];
+    for (const entry of yield* fs.readDirectory(dir).pipe(fileSystemFailure("read", dir))) {
       if (RENAME_PRUNE.has(entry)) {
         continue;
       }
       const full = path.join(dir, entry);
-      const info = yield* orFail(fs.stat(full), `Failed to stat ${full}`);
+      const info = yield* fs.stat(full).pipe(fileSystemFailure("stat", full));
       if (info.type === "Directory") {
-        changed.push(...(yield* renameIn(full, pattern, to)));
+        changed.push(...(yield* renameIn(root, full, pattern, to)));
         continue;
       }
       if (!RENAME_EXTENSIONS.some((extension) => entry.endsWith(extension))) {
         continue;
       }
-      const contents = yield* orFail(fs.readFileString(full), `Failed to read ${full}`);
+      const contents = yield* fs.readFileString(full).pipe(fileSystemFailure("read", full));
       const renamed = contents.replace(pattern, to);
       if (renamed !== contents) {
-        yield* orFail(fs.writeFileString(full, renamed), `Failed to write ${full}`);
-        changed.push(full);
+        yield* fs.writeFileString(full, renamed).pipe(fileSystemFailure("write", full));
+        changed.push(RepoPath.make(path.relative(root, full)));
       }
     }
     return changed;
@@ -445,8 +369,8 @@ const renameIn = (
 export interface MakePublicResult {
   readonly from: string;
   readonly to: string;
-  /** Repo-relative paths sync wrote, for the caller to format. */
-  readonly written: ReadonlyArray<string>;
+  /** Paths sync wrote, for the caller to format. */
+  readonly written: ReadonlyArray<RepoPath>;
 }
 
 /**
@@ -454,7 +378,7 @@ export interface MakePublicResult {
  * whole workspace, drop `private`, then sync so it gains everything a public
  * package carries.
  */
-export const makePublic = Effect.fnUntraced(function* (root: string, name: string) {
+export const makePublic = Effect.fnUntraced(function* (root: string, name: PackageName) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const snapshot = yield* loadWorkspace(root);
@@ -462,62 +386,59 @@ export const makePublic = Effect.fnUntraced(function* (root: string, name: strin
 
   const target = snapshot.members.find((member) => member.dir === dir);
   if (target === undefined) {
-    return yield* new WorkspaceError({ message: `${dir} is not a workspace package` });
+    return yield* new PackageNotFound({ dir });
   }
   if (!isPrivate(target)) {
-    return yield* new WorkspaceError({ message: `${dir} is already public` });
+    return yield* new AlreadyPublic({ dir });
   }
   const scope = yield* requireScope(snapshot);
 
-  const byName = new Map(snapshot.members.map((member) => [member.manifest["name"], member]));
+  const byName = new Map(snapshot.members.map((member) => [member.manifest.name, member]));
   const privateDeps = dependencyNames(target.manifest, BUILD_DEPENDENCY_FIELDS).filter((dep) => {
     const member = byName.get(dep);
     return member !== undefined && isPrivate(member);
   });
   if (privateDeps.length > 0) {
-    return yield* new WorkspaceError({
-      message: `${dir} depends on private workspace packages, make them public first: ${privateDeps.join(", ")}`,
-    });
+    return yield* new DependsOnPrivate({ dir, dependencies: privateDeps });
   }
 
-  const from = target.manifest["name"];
-  if (typeof from !== "string") {
-    return yield* new WorkspaceError({ message: `${dir}/package.json has no "name" field` });
+  const from = target.manifest.name;
+  if (from === undefined) {
+    return yield* new MissingName({ path: path.join(dir, "package.json") });
   }
   const to = `${scope}/${from.split("/").pop() ?? name}`;
   // Not followed by a name character, so renaming @repo/foo leaves @repo/foo-extra alone.
-  yield* renameIn(root, new RegExp(`${escapeRegExp(from)}(?![\\w-])`, "g"), to);
+  yield* renameIn(root, root, new RegExp(`${escapeRegExp(from)}(?![\\w-])`, "g"), to);
 
   const manifestPath = path.join(root, dir, "package.json");
-  const { private: _private, ...manifest } = yield* readJson(manifestPath);
-  yield* orFail(
-    fs.writeFileString(manifestPath, serialize(manifest)),
-    `Failed to write ${manifestPath}`,
-  );
+  const { private: _private, ...json } = (yield* readManifest(manifestPath)).json;
+  yield* fs
+    .writeFileString(manifestPath, serialize(json))
+    .pipe(fileSystemFailure("write", manifestPath));
 
   const { written } = yield* syncWorkspace(root, { check: false });
   return {
     from,
     to,
-    written: [path.join(dir, "package.json"), ...written],
+    written: [repoPath(path, dir, "package.json"), ...written],
   } satisfies MakePublicResult;
 });
 
 /** Run the repo formatter over files written as plain `JSON.stringify` output. */
 export const formatFiles = Effect.fnUntraced(function* (
   root: string,
-  files: ReadonlyArray<string>,
+  files: ReadonlyArray<RepoPath>,
 ) {
   if (files.length === 0) {
     return;
   }
+  const command = "vp fmt";
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const exitCode = yield* orFail(
-    spawner.exitCode(ChildProcess.make("vp", ["fmt", ...files], { cwd: root })),
-    "Failed to run vp fmt",
-  );
+  const exitCode = yield* spawner
+    .exitCode(ChildProcess.make("vp", ["fmt", ...files], { cwd: root }))
+    .pipe(Effect.mapError((cause) => new ProcessFailure({ command, cause })));
   if (exitCode !== 0) {
-    return yield* new WorkspaceError({ message: `vp fmt exited with ${exitCode}` });
+    return yield* new ProcessFailure({ command, exitCode });
   }
 });
 

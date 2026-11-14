@@ -2,7 +2,8 @@ import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { retargetExtends, validateName } from "@repo/cli/internal/scaffold";
+import { retargetExtends } from "@repo/cli/internal/scaffold";
+import { decodePackageName } from "@repo/cli/Model";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const base = path.join(repoRoot, "tsconfig.base.json");
@@ -35,7 +36,7 @@ it("leaves comments and a package-specifier extends untouched", () => {
 
 it.effect("rejects a name that is not kebab-case", () =>
   Effect.gen(function* () {
-    const error = yield* Effect.flip(validateName("My_Package"));
-    expect(error._tag).toBe("ScaffoldError");
+    const error = yield* Effect.flip(decodePackageName("My_Package"));
+    expect(error._tag).toBe("InvalidName");
   }),
 );

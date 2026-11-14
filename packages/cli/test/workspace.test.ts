@@ -1,6 +1,23 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as path from "node:path";
+import { Schema } from "effect";
+import { type JsonObject, Manifest } from "@repo/cli/internal/manifest";
 import { type Member, planSync, type Snapshot } from "@repo/cli/internal/workspace";
+import { RepoPath } from "@repo/cli/Model";
+
+/** A member whose decoded view matches its JSON, as loading would build it. */
+const member = (
+  dir: string,
+  kind: Member["kind"],
+  json: JsonObject,
+  buildConfig: string | undefined,
+): Member => ({
+  dir: RepoPath.make(dir),
+  kind,
+  json,
+  manifest: Schema.decodeSync(Manifest)(json),
+  buildConfig,
+});
 
 const buildConfigFragment = `{
   "extends": "./tsconfig.json",
@@ -12,12 +29,7 @@ const buildConfigFragment = `{
 
 const snapshot = (...members: ReadonlyArray<Member>): Snapshot => ({
   members: [
-    {
-      dir: "",
-      kind: "root",
-      manifest: { name: "monorepo", private: true, repo: { npmScope: "@acme" } },
-      buildConfig: undefined,
-    },
+    member("", "root", { name: "monorepo", private: true, repo: { npmScope: "@acme" } }, undefined),
     ...members,
   ],
   fragments: {
@@ -30,12 +42,13 @@ const snapshot = (...members: ReadonlyArray<Member>): Snapshot => ({
   },
 });
 
-const publicPackage = (dir: string, manifest: Record<string, unknown> = {}): Member => ({
-  dir,
-  kind: "package",
-  manifest: { name: `@acme/${path.basename(dir)}`, version: "0.0.0", ...manifest },
-  buildConfig: buildConfigFragment,
-});
+const publicPackage = (dir: string, json: JsonObject = {}): Member =>
+  member(
+    dir,
+    "package",
+    { name: `@acme/${path.basename(dir)}`, version: "0.0.0", ...json },
+    buildConfigFragment,
+  );
 
 const editedManifest = (snap: Snapshot, dir: string) => {
   const edit = planSync(snap, path).edits.find((e) => e.path === `${dir}/package.json`);
@@ -103,9 +116,7 @@ describe("planSync", () => {
               .map(([k, v]) => [k, reversed(v)]),
           )
         : value;
-    const shuffled = snapshot(
-      publicPackage("packages/foo", reversed(synced) as Record<string, unknown>),
-    );
+    const shuffled = snapshot(publicPackage("packages/foo", reversed(synced) as JsonObject));
     expect(planSync(shuffled, path)).toEqual({ edits: [], findings: [] });
   });
 
@@ -149,13 +160,13 @@ describe("planSync", () => {
     });
   });
 
-  const privatePackage = (dir: string, extra: Partial<Member> = {}): Member => ({
-    dir,
-    kind: "package",
-    manifest: { name: `@repo/${path.basename(dir)}`, private: true },
-    buildConfig: undefined,
-    ...extra,
-  });
+  const privatePackage = (dir: string, json: JsonObject = {}, buildConfig?: string): Member =>
+    member(
+      dir,
+      "package",
+      { name: `@repo/${path.basename(dir)}`, private: true, ...json },
+      buildConfig,
+    );
 
   it("flags a public package depending on a private one, and references only public deps", () => {
     const snap = snapshot(
@@ -172,11 +183,9 @@ describe("planSync", () => {
   });
 
   it("flags build leftovers on a private package without touching it", () => {
-    const leftover = privatePackage("packages/old", { buildConfig: buildConfigFragment });
-    const snap = snapshot({
-      ...leftover,
-      manifest: { ...leftover.manifest, publishConfig: { access: "public" } },
-    });
+    const snap = snapshot(
+      privatePackage("packages/old", { publishConfig: { access: "public" } }, buildConfigFragment),
+    );
     expect(planSync(snap, path)).toEqual({
       edits: [],
       findings: [
@@ -200,7 +209,9 @@ describe("planSync", () => {
       return {
         ...base,
         members: base.members.map((m) =>
-          m.kind === "root" ? { ...m, manifest: { name: "monorepo", private: true } } : m,
+          m.kind === "root"
+            ? member("", "root", { name: "monorepo", private: true }, undefined)
+            : m,
         ),
       };
     };

@@ -1,12 +1,25 @@
-import { Data, Effect, FileSystem, Path, type PlatformError } from "effect";
-import type { ChildProcessSpawner } from "effect/process";
+import { Effect, FileSystem, Path } from "effect";
+import { RepoPath, type PackageName, type Visibility } from "../Model.ts";
+import {
+  AlreadyExists,
+  fileSystemFailure,
+  type FileSystemFailure,
+  HasDependents,
+  MissingName,
+  NoWorkspaceRoot,
+  PackageNotFound,
+  ProtectedPackage,
+  UnknownTemplate,
+  WORKSPACE_MARKER,
+} from "../PackageError.ts";
+import { decodeText } from "./manifest.ts";
 import {
   dependentsOf,
   ensureNpmScope,
   loadWorkspace,
   makePublic,
   syncWorkspace,
-  type WorkspaceError,
+  templatesDir,
 } from "./workspace.ts";
 
 /**
@@ -14,74 +27,47 @@ import {
  * the CLI surface; this module owns the filesystem work.
  */
 
-export class ScaffoldError extends Data.TaggedError("ScaffoldError")<{
-  readonly message: string;
-}> {}
-
-/** Collapse a filesystem failure into a `ScaffoldError` with context. */
-const orFail = <A>(
-  effect: Effect.Effect<A, PlatformError.PlatformError>,
-  message: string,
-): Effect.Effect<A, ScaffoldError> =>
-  effect.pipe(
-    Effect.mapError((cause) => new ScaffoldError({ message: `${message}: ${cause.message}` })),
-  );
-
-const PACKAGE_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
 const PACKAGES_DIR = "packages";
 
-/**
- * Templates ship alongside the CLI, so resolve them from this file rather than
- * from the repo root. That keeps the two together wherever the CLI is run from.
- */
-const templatesDir = (path: Path.Path) => path.resolve(import.meta.dirname, "../../templates");
-
 /** The dev CLI itself — removing it with itself is never what you meant. */
-const PROTECTED_PACKAGES = ["cli"];
-const WORKSPACE_MARKER = "pnpm-workspace.yaml";
+export const PROTECTED_PACKAGES: ReadonlyArray<string> = ["cli"];
 
 /**
  * Walk up from `start` until the workspace root is found, so the command works
  * from any directory in the repo.
  */
-export const findRepoRoot = (
-  start: string,
-): Effect.Effect<string, ScaffoldError, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-
-    let current = path.resolve(start);
-    for (;;) {
-      const marker = path.join(current, WORKSPACE_MARKER);
-      if (yield* orFail(fs.exists(marker), `Failed to stat ${marker}`)) {
-        return current;
-      }
-      const parent = path.dirname(current);
-      if (parent === current) {
-        return yield* new ScaffoldError({
-          message: `Could not find ${WORKSPACE_MARKER} in ${start} or any parent directory`,
-        });
-      }
-      current = parent;
-    }
-  });
-
-/** Directory names under `full` that contain a `package.json`, sorted. */
-const listPackageDirs = Effect.fnUntraced(function* (full: string, label: string) {
+export const findRepoRoot = Effect.fnUntraced(function* (start: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
-  if (!(yield* orFail(fs.exists(full), `Failed to stat ${label}`))) {
+  let current = path.resolve(start);
+  for (;;) {
+    const marker = path.join(current, WORKSPACE_MARKER);
+    if (yield* fs.exists(marker).pipe(fileSystemFailure("stat", marker))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return yield* new NoWorkspaceRoot({ start });
+    }
+    current = parent;
+  }
+});
+
+/** Directory names under `full` that contain a `package.json`, sorted. */
+const listPackageDirs = Effect.fnUntraced(function* (full: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+
+  if (!(yield* fs.exists(full).pipe(fileSystemFailure("stat", full)))) {
     return [] as Array<string>;
   }
-  const entries = yield* orFail(fs.readDirectory(full), `Failed to read ${label}`);
+  const entries = yield* fs.readDirectory(full).pipe(fileSystemFailure("read", full));
 
   const found: Array<string> = [];
   for (const entry of [...entries].sort()) {
     const manifest = path.join(full, entry, "package.json");
-    if (yield* orFail(fs.exists(manifest), `Failed to stat ${manifest}`)) {
+    if (yield* fs.exists(manifest).pipe(fileSystemFailure("stat", manifest))) {
       found.push(entry);
     }
   }
@@ -94,20 +80,15 @@ const listPackageDirs = Effect.fnUntraced(function* (full: string, label: string
  */
 export const listTemplates = Effect.fnUntraced(function* () {
   const path = yield* Path.Path;
-  return yield* listPackageDirs(templatesDir(path), "the templates directory");
-});
-
-/** Every directory in `packages/` that looks like a package. */
-export const listPackages = Effect.fnUntraced(function* (root: string) {
-  const path = yield* Path.Path;
-  return yield* listPackageDirs(path.join(root, PACKAGES_DIR), PACKAGES_DIR);
+  return yield* listPackageDirs(templatesDir(path));
 });
 
 /** Packages that `pkg rm` is allowed to delete — never offer the CLI itself. */
-export const listRemovablePackages = (root: string) =>
-  Effect.map(listPackages(root), (packages) =>
-    packages.filter((name) => !PROTECTED_PACKAGES.includes(name)),
-  );
+export const listRemovablePackages = Effect.fnUntraced(function* (root: string) {
+  const path = yield* Path.Path;
+  const packages = yield* listPackageDirs(path.join(root, PACKAGES_DIR));
+  return packages.filter((name) => !PROTECTED_PACKAGES.includes(name));
+});
 
 /** Directories that must never be carried over from the template. */
 const PRUNE = ["node_modules", "dist"];
@@ -123,22 +104,21 @@ const prepareCopy = (
   dir: string,
   from: string,
   to: string,
-): Effect.Effect<void, ScaffoldError, FileSystem.FileSystem | Path.Path> =>
+): Effect.Effect<void, FileSystemFailure, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
-    const entries = yield* orFail(fs.readDirectory(dir), `Failed to read ${dir}`);
+    const entries = yield* fs.readDirectory(dir).pipe(fileSystemFailure("read", dir));
     for (const entry of entries) {
       const full = path.join(dir, entry);
       if (PRUNE.includes(entry)) {
-        yield* orFail(
-          fs.remove(full, { recursive: true, force: true }),
-          `Failed to remove ${full}`,
-        );
+        yield* fs
+          .remove(full, { recursive: true, force: true })
+          .pipe(fileSystemFailure("remove", full));
         continue;
       }
-      const info = yield* orFail(fs.stat(full), `Failed to stat ${full}`);
+      const info = yield* fs.stat(full).pipe(fileSystemFailure("stat", full));
       if (info.type === "Directory") {
         yield* prepareCopy(full, from, to);
         continue;
@@ -146,12 +126,11 @@ const prepareCopy = (
       if (!REWRITE_EXTENSIONS.some((extension) => full.endsWith(extension))) {
         continue;
       }
-      const contents = yield* orFail(fs.readFileString(full), `Failed to read ${full}`);
+      const contents = yield* fs.readFileString(full).pipe(fileSystemFailure("read", full));
       if (contents.includes(from)) {
-        yield* orFail(
-          fs.writeFileString(full, contents.replaceAll(from, to)),
-          `Failed to write ${full}`,
-        );
+        yield* fs
+          .writeFileString(full, contents.replaceAll(from, to))
+          .pipe(fileSystemFailure("write", full));
       }
     }
   });
@@ -175,9 +154,9 @@ export const retargetExtends = (
 
 export interface CreatePackageResult {
   readonly packageName: string;
-  readonly packagePath: string;
-  /** Repo-relative files written as JSON, for the caller to format. */
-  readonly written: ReadonlyArray<string>;
+  readonly packagePath: RepoPath;
+  /** Files written as JSON, for the caller to format. */
+  readonly written: ReadonlyArray<RepoPath>;
 }
 
 export interface RemovePackageResult extends CreatePackageResult {
@@ -185,154 +164,110 @@ export interface RemovePackageResult extends CreatePackageResult {
   readonly wasPublic: boolean;
 }
 
-export type Visibility = "public" | "private";
-
-type Services = FileSystem.FileSystem | Path.Path | ChildProcessSpawner.ChildProcessSpawner;
-
-/** Shared so the CLI can reject a bad name at the prompt as well as after it. */
-export const nameHint = 'use lowercase kebab-case, e.g. "my-package"';
-
-export const validateName = (name: string): Effect.Effect<string, ScaffoldError> =>
-  PACKAGE_NAME.test(name)
-    ? Effect.succeed(name)
-    : Effect.fail(
-        new ScaffoldError({ message: `"${name}" is not a valid package name — ${nameHint}` }),
-      );
-
 /**
  * Copy a template to `packages/<name>`. A public package is then made public
  * exactly as `pkg make-public` would, so both paths share one implementation.
  */
-export const createPackage = (
+export const createPackage = Effect.fnUntraced(function* (
   root: string,
-  name: string,
+  name: PackageName,
   templateName: string,
   visibility: Visibility,
-): Effect.Effect<CreatePackageResult, ScaffoldError | WorkspaceError, Services> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
 
-    yield* validateName(name);
+  const template = path.join(templatesDir(path), templateName);
+  const packagePath = RepoPath.make(path.join(PACKAGES_DIR, name));
+  const target = path.join(root, packagePath);
 
-    const template = path.join(templatesDir(path), templateName);
-    const packagePath = `${PACKAGES_DIR}/${name}`;
-    const target = path.join(root, packagePath);
+  const templateManifest = path.join(template, "package.json");
+  if (!(yield* fs.exists(templateManifest).pipe(fileSystemFailure("stat", templateManifest)))) {
+    return yield* new UnknownTemplate({
+      template: templateName,
+      available: yield* listTemplates(),
+    });
+  }
+  if (yield* fs.exists(target).pipe(fileSystemFailure("stat", packagePath))) {
+    return yield* new AlreadyExists({ dir: packagePath });
+  }
+  if (visibility === "public") {
+    yield* ensureNpmScope(root);
+  }
 
-    const templateManifest = path.join(template, "package.json");
-    if (!(yield* orFail(fs.exists(templateManifest), `Failed to stat ${templateManifest}`))) {
-      return yield* new ScaffoldError({ message: `No template named "${templateName}"` });
-    }
-    if (yield* orFail(fs.exists(target), `Failed to stat ${packagePath}`)) {
-      return yield* new ScaffoldError({ message: `${packagePath} already exists` });
-    }
-    if (visibility === "public") {
-      yield* ensureNpmScope(root);
-    }
+  // The template's own package name is the string to repoint, so templates are
+  // free to name themselves anything without the CLI knowing about it.
+  const text = yield* fs
+    .readFileString(templateManifest)
+    .pipe(fileSystemFailure("read", templateManifest));
+  const templatePackageName = (yield* decodeText(text, templateManifest)).manifest.name;
+  if (templatePackageName === undefined) {
+    return yield* new MissingName({ path: templateManifest });
+  }
 
-    // The template's own package name is the string to repoint, so templates are
-    // free to name themselves anything without the CLI knowing about it.
-    const manifest = yield* orFail(
-      fs.readFileString(templateManifest),
-      `Failed to read ${templateManifest}`,
-    );
-    const templatePackageName = /"name"\s*:\s*"([^"]+)"/.exec(manifest)?.[1];
-    if (templatePackageName === undefined) {
-      return yield* new ScaffoldError({ message: `${templateManifest} has no "name" field` });
-    }
+  yield* fs.copy(template, target).pipe(fileSystemFailure("copy", template));
 
-    yield* orFail(fs.copy(template, target), `Failed to copy the ${templateName} template`);
+  const packageName = `@repo/${name}`;
+  yield* prepareCopy(target, templatePackageName, packageName);
 
-    const packageName = `@repo/${name}`;
-    yield* prepareCopy(target, templatePackageName, packageName);
+  const tsconfigPath = path.join(target, "tsconfig.json");
+  if (yield* fs.exists(tsconfigPath).pipe(fileSystemFailure("stat", tsconfigPath))) {
+    const tsconfig = yield* fs
+      .readFileString(tsconfigPath)
+      .pipe(fileSystemFailure("read", tsconfigPath));
+    yield* fs
+      .writeFileString(tsconfigPath, retargetExtends(tsconfig, template, target, path))
+      .pipe(fileSystemFailure("write", tsconfigPath));
+  }
 
-    const tsconfigPath = path.join(target, "tsconfig.json");
-    if (yield* orFail(fs.exists(tsconfigPath), `Failed to stat ${tsconfigPath}`)) {
-      const tsconfig = yield* orFail(
-        fs.readFileString(tsconfigPath),
-        `Failed to read ${tsconfigPath}`,
-      );
-      yield* orFail(
-        fs.writeFileString(tsconfigPath, retargetExtends(tsconfig, template, target, path)),
-        `Failed to write ${tsconfigPath}`,
-      );
-    }
-
-    if (visibility === "public") {
-      const { to, written } = yield* makePublic(root, name);
-      return { packageName: to, packagePath, written };
-    }
-    return { packageName, packagePath, written: [] };
-  });
+  if (visibility === "public") {
+    const { to, written } = yield* makePublic(root, name);
+    return { packageName: to, packagePath, written } satisfies CreatePackageResult;
+  }
+  return { packageName, packagePath, written: [] } satisfies CreatePackageResult;
+});
 
 /**
  * Everything `pkg rm` refuses on, checked without deleting anything, so the CLI
- * can refuse before it asks for confirmation: an invalid or protected name, a
- * missing directory, or a workspace member that still depends on the package.
+ * can refuse before it asks for confirmation: a protected name, a package that
+ * is not a workspace member, or a member that still depends on it.
  */
-export const checkRemovable = (
-  root: string,
-  name: string,
-): Effect.Effect<
-  { readonly packageName: string; readonly packagePath: string; readonly wasPublic: boolean },
-  ScaffoldError | WorkspaceError,
-  Services
-> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
+export const checkRemovable = Effect.fnUntraced(function* (root: string, name: PackageName) {
+  const path = yield* Path.Path;
+  const packagePath = RepoPath.make(path.join(PACKAGES_DIR, name));
 
-    yield* validateName(name);
+  if (PROTECTED_PACKAGES.includes(name)) {
+    return yield* new ProtectedPackage({ dir: packagePath });
+  }
 
-    if (PROTECTED_PACKAGES.includes(name)) {
-      return yield* new ScaffoldError({
-        message: `${PACKAGES_DIR}/${name} is this CLI — delete it by hand if you really mean to`,
-      });
-    }
+  const snapshot = yield* loadWorkspace(root);
+  const target = snapshot.members.find((member) => member.dir === packagePath);
+  if (target === undefined) {
+    return yield* new PackageNotFound({ dir: packagePath });
+  }
+  const packageName = target.manifest.name ?? `@repo/${name}`;
 
-    const packagePath = `${PACKAGES_DIR}/${name}`;
-    const target = path.join(root, packagePath);
+  const dependents = dependentsOf(snapshot, packageName, path);
+  if (dependents.length > 0) {
+    return yield* new HasDependents({ packageName, dependents });
+  }
 
-    if (!(yield* orFail(fs.exists(target), `Failed to stat ${packagePath}`))) {
-      return yield* new ScaffoldError({ message: `${packagePath} does not exist` });
-    }
-
-    const manifestPath = path.join(target, "package.json");
-    const manifest = yield* orFail(
-      fs.readFileString(manifestPath),
-      `Failed to read ${manifestPath}`,
-    );
-    const packageName = /"name"\s*:\s*"([^"]+)"/.exec(manifest)?.[1] ?? `@repo/${name}`;
-
-    const dependents = dependentsOf(yield* loadWorkspace(root), packageName, path);
-    if (dependents.length > 0) {
-      return yield* new ScaffoldError({
-        message: `${packageName} is still a dependency. Remove it from these first:\n${dependents.map((d) => `  ${d}`).join("\n")}`,
-      });
-    }
-
-    const wasPublic = !/"private"\s*:\s*true/.test(manifest);
-    return { packageName, packagePath, wasPublic };
-  });
+  return { packageName, packagePath, wasPublic: target.manifest.private !== true };
+});
 
 /**
  * The reverse of `createPackage`: delete the directory once `checkRemovable`
  * passes, then sync. Nothing here prompts — the CLI owns confirmation.
  */
-export const removePackage = (
-  root: string,
-  name: string,
-): Effect.Effect<RemovePackageResult, ScaffoldError | WorkspaceError, Services> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const { packageName, packagePath, wasPublic } = yield* checkRemovable(root, name);
+export const removePackage = Effect.fnUntraced(function* (root: string, name: PackageName) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const { packageName, packagePath, wasPublic } = yield* checkRemovable(root, name);
 
-    yield* orFail(
-      fs.remove(path.join(root, packagePath), { recursive: true, force: true }),
-      `Failed to remove ${packagePath}`,
-    );
+  yield* fs
+    .remove(path.join(root, packagePath), { recursive: true, force: true })
+    .pipe(fileSystemFailure("remove", packagePath));
 
-    const { written } = yield* syncWorkspace(root, { check: false });
-    return { packageName, packagePath, written, wasPublic };
-  });
+  const { written } = yield* syncWorkspace(root, { check: false });
+  return { packageName, packagePath, written, wasPublic } satisfies RemovePackageResult;
+});

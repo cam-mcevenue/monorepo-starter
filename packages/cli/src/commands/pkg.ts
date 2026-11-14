@@ -6,11 +6,7 @@ import {
   findRepoRoot,
   listRemovablePackages,
   listTemplates,
-  nameHint,
   removePackage,
-  ScaffoldError,
-  validateName,
-  type Visibility,
 } from "../internal/scaffold.ts";
 import {
   type Finding,
@@ -18,10 +14,15 @@ import {
   listPrivatePackages,
   makePublic,
   syncWorkspace,
-  WorkspaceError,
 } from "../internal/workspace.ts";
-
-const PACKAGE_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+import { decodePackageName, type Visibility } from "../Model.ts";
+import {
+  ConflictingFlags,
+  nameHint,
+  NothingToChoose,
+  OutOfSync,
+  UnknownTemplate,
+} from "../PackageError.ts";
 
 const nameArgument = Argument.String("name").pipe(
   Argument.withDescription("Package name, without the scope (prompts when omitted)"),
@@ -34,27 +35,23 @@ const promptName = (message: string) =>
     Prompt.String({
       message,
       validate: (value) =>
-        PACKAGE_NAME.test(value.trim())
-          ? Effect.succeed(value.trim())
-          : Effect.fail(`Invalid name — ${nameHint}`),
+        decodePackageName(value).pipe(Effect.mapError(() => `Invalid name — ${nameHint}`)),
     }),
   );
 
 const resolveName = Effect.fnUntraced(function* (provided: Option.Option<string>, message: string) {
-  if (Option.isSome(provided)) {
-    return yield* validateName(provided.value);
-  }
-  return yield* promptName(message);
+  const input = Option.isSome(provided) ? provided.value : yield* promptName(message);
+  return yield* decodePackageName(input);
 });
 
 /** Pick one of a list, or fail if the list is empty. */
 const promptChoice = Effect.fnUntraced(function* (
   message: string,
   choices: ReadonlyArray<string>,
-  emptyMessage: string,
+  what: string,
 ) {
   if (choices.length === 0) {
-    return yield* new ScaffoldError({ message: emptyMessage });
+    return yield* new NothingToChoose({ what });
   }
   return yield* Prompt.run(
     Prompt.Select({
@@ -69,7 +66,7 @@ const repoRoot = Effect.suspend(() => findRepoRoot(process.cwd()));
 /** `--public`, `--private`, or a prompt when neither is given. */
 const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPrivate: boolean) {
   if (isPublic && isPrivate) {
-    return yield* new ScaffoldError({ message: "Pass --public or --private, not both" });
+    return yield* new ConflictingFlags({ flags: ["--public", "--private"] });
   }
   if (isPublic || isPrivate) {
     return isPublic ? "public" : "private";
@@ -110,10 +107,8 @@ const add = Command.make(
       const chosenTemplate = Option.isSome(template)
         ? templates.includes(template.value)
           ? template.value
-          : yield* new ScaffoldError({
-              message: `Unknown template "${template.value}". Available: ${templates.join(", ")}`,
-            })
-        : yield* promptChoice("Which template?", templates, "No templates found");
+          : yield* new UnknownTemplate({ template: template.value, available: templates })
+        : yield* promptChoice("Which template?", templates, "templates");
 
       const chosenName = yield* resolveName(options.name, "Package name?");
       const visibility = yield* resolveVisibility(options.public, options.private);
@@ -136,13 +131,15 @@ const add = Command.make(
 const makePublicCommand = Command.make("make-public", { name: nameArgument }, ({ name }) =>
   Effect.gen(function* () {
     const root = yield* repoRoot;
-    const chosenName = Option.isSome(name)
-      ? yield* validateName(name.value)
-      : yield* promptChoice(
-          "Which package?",
-          yield* listPrivatePackages(root),
-          "No private packages found in packages/",
-        );
+    const chosenName = yield* decodePackageName(
+      Option.isSome(name)
+        ? name.value
+        : yield* promptChoice(
+            "Which package?",
+            yield* listPrivatePackages(root),
+            "private packages in packages/",
+          ),
+    );
 
     const { from, to, written } = yield* makePublic(root, chosenName);
     yield* formatFiles(root, written);
@@ -178,9 +175,7 @@ const sync = Command.make(
       }
       yield* printFindings(findings);
       if (findings.length > 0) {
-        return yield* new WorkspaceError({
-          message: `pkg sync: ${findings.length} problem${findings.length === 1 ? "" : "s"} found`,
-        });
+        return yield* new OutOfSync({ count: findings.length });
       }
     }),
 ).pipe(
@@ -202,13 +197,15 @@ const rm = Command.make(
   ({ name, yes }) =>
     Effect.gen(function* () {
       const root = yield* repoRoot;
-      const chosenName = Option.isSome(name)
-        ? yield* validateName(name.value)
-        : yield* promptChoice(
-            "Which package?",
-            yield* listRemovablePackages(root),
-            "No removable packages found in packages/",
-          );
+      const chosenName = yield* decodePackageName(
+        Option.isSome(name)
+          ? name.value
+          : yield* promptChoice(
+              "Which package?",
+              yield* listRemovablePackages(root),
+              "removable packages in packages/",
+            ),
+      );
 
       // Refuse before asking, so a "yes" is never followed by a refusal.
       const { packageName: target, packagePath } = yield* checkRemovable(root, chosenName);

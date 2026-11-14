@@ -6,6 +6,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { checkRemovable, createPackage, removePackage } from "@repo/cli/internal/scaffold";
 import { loadWorkspace, makePublic, syncWorkspace } from "@repo/cli/internal/workspace";
+import { PackageName } from "@repo/cli/Model";
+
+const name = (value: string) => PackageName.make(value);
 
 /**
  * A throwaway workspace on disk, so these tests run the real `pnpm ls` and
@@ -114,7 +117,7 @@ describe("makePublic", () => {
         "packages/app/src/main.ts": 'import "@repo/foo/Thing";\nimport "@repo/foo-extra";\n',
       });
 
-      const result = yield* run(makePublic(repo.root, "foo"));
+      const result = yield* run(makePublic(repo.root, name("foo")));
 
       expect(result).toMatchObject({ from: "@repo/foo", to: "@acme/foo" });
       const manifest = repo.json("packages/foo/package.json");
@@ -139,7 +142,7 @@ describe("makePublic", () => {
         "package.json": { name: "monorepo", private: true },
         "packages/foo/package.json": { name: "@repo/foo", private: true },
       });
-      const noScope = yield* run(Effect.flip(makePublic(unscoped.root, "foo")));
+      const noScope = yield* run(Effect.flip(makePublic(unscoped.root, name("foo"))));
       expect(noScope.message).toContain('"repo": { "npmScope"');
 
       const withPrivateDeps = fixture({
@@ -152,7 +155,7 @@ describe("makePublic", () => {
         "packages/a/package.json": { name: "@repo/a", private: true },
         "packages/b/package.json": { name: "@repo/b", private: true },
       });
-      const blocked = yield* run(Effect.flip(makePublic(withPrivateDeps.root, "foo")));
+      const blocked = yield* run(Effect.flip(makePublic(withPrivateDeps.root, name("foo"))));
       expect(blocked.message).toContain("@repo/a, @repo/b");
       expect(withPrivateDeps.json("packages/foo/package.json").private).toBe(true);
     }),
@@ -175,15 +178,15 @@ describe("removePackage", () => {
         },
       });
 
-      const checked = yield* Effect.flip(run(checkRemovable(repo.root, "foo")));
+      const checked = yield* Effect.flip(run(checkRemovable(repo.root, name("foo"))));
       expect(checked.message).toContain("packages/app/package.json (devDependencies)");
 
-      const refused = yield* Effect.flip(run(removePackage(repo.root, "foo")));
+      const refused = yield* Effect.flip(run(removePackage(repo.root, name("foo"))));
       expect(refused.message).toContain("packages/app/package.json (devDependencies)");
       expect(refused.message).toContain("packages/lib/package.json (peerDependencies)");
       expect(repo.exists("packages/foo/package.json")).toBe(true);
 
-      const removed = yield* run(removePackage(repo.root, "app"));
+      const removed = yield* run(removePackage(repo.root, name("app")));
       expect(removed.packageName).toBe("@repo/app");
       expect(repo.exists("packages/app")).toBe(false);
     }),
@@ -194,7 +197,7 @@ describe("createPackage", () => {
   it.effect("public: scaffolds from the template, then makes it public in the scope", () =>
     Effect.gen(function* () {
       const repo = fixture({});
-      const created = yield* run(createPackage(repo.root, "widget", "pkg-effect", "public"));
+      const created = yield* run(createPackage(repo.root, name("widget"), "pkg-effect", "public"));
 
       expect(created.packageName).toBe("@acme/widget");
       const manifest = repo.json("packages/widget/package.json");
@@ -210,7 +213,7 @@ describe("createPackage", () => {
     Effect.gen(function* () {
       const repo = fixture({ "package.json": { name: "monorepo", private: true } });
       const error = yield* run(
-        Effect.flip(createPackage(repo.root, "widget", "pkg-effect", "public")),
+        Effect.flip(createPackage(repo.root, name("widget"), "pkg-effect", "public")),
       );
 
       expect(error.message).toContain('"repo": { "npmScope"');
