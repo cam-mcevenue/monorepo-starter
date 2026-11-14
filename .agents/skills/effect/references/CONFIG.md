@@ -11,7 +11,7 @@ export const dataDirectoryConfig = Config.schema(
 )
 
 export const layerFromEnvironment = Layer.effect(
-  Configuration.Service,
+  Configuration,
   Effect.gen(function* () {
     const apiKey = yield* Config.Redacted("API_KEY")
     const optionalModel = yield* Config.option(Config.String("MODEL"))
@@ -19,7 +19,7 @@ export const layerFromEnvironment = Layer.effect(
       Config.withDefault(false),
     )
 
-    return Configuration.Service.of({ apiKey, optionalModel, enabled })
+    return Configuration.of({ apiKey, optionalModel, enabled })
   }),
 )
 ```
@@ -55,14 +55,14 @@ export const layerConfig = (
   config: Config.Wrap<ClientOptions>,
 ) =>
   Layer.effect(
-    Client.Service,
+    Client,
     Config.unwrap(config).pipe(
       Effect.flatMap(makeClient),
-      Effect.map((client) => Client.Service.of(client)),
+      Effect.map((client) => Client.of(client)),
     ),
   )
 ```
 
 Use this pattern when a service naturally supports runtime config while still allowing tests to pass concrete values.
 
-Use `Layer.succeed(AppConfiguration.Service, testConfig)` when the app already wraps environment config in an application service and the test does not need to exercise Config decoding itself.
+Use `Layer.succeed(AppConfiguration, testConfig)` when the app already wraps environment config in an application service and the test does not need to exercise Config decoding itself.

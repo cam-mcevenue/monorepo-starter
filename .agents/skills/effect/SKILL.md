@@ -44,7 +44,8 @@ If a task spans several branches, read all matching files before editing.
 - Define public service methods and non-trivial internal service methods with `Effect.fn("Domain.operation")`.
 - Use `Effect.fnUntraced` only for internal helpers where stack-frame/span metadata is intentionally unnecessary.
 - Prefer `Context.Service` for application services when the codebase has not standardized on another current service-tag style.
-- Build real service implementations with `Layer.effect(Service, Effect.gen(...))` and return `Service.of({ ... })`.
+- Name the tag class after its module and its shape `Service`, as Effect's own packages do: `class UserRepo extends Context.Service<UserRepo, Service>()(...)`, imported as `import * as UserRepo`.
+- Build real service implementations as a `make` effect returning `UserRepo.of({ ... })`, provided by `Layer.effect(UserRepo, make)`.
 - Model records with `Schema.Struct(...)` plus a same-name `interface`.
 - Model typed Effect errors with `Schema.TaggedError`.
 - Read runtime config through `Config`, not direct `process.env` access in application logic.
@@ -64,7 +65,7 @@ If a task spans several branches, read all matching files before editing.
 - External/custom discriminator such as `type`: `Schema.Struct({ type: Schema.tag("variant"), ... })` plus `Schema.toTaggedUnion("type")` when union helpers are needed.
 - Expected typed failure: `Schema.TaggedError`.
 - Unknown boundary payload: `Schema.decodeUnknownEffect(...)`.
-- Service boundary: `Context.Service<Service, Interface>()(...)` plus `Layer.effect(...)` plus `Service.of(...)`.
+- Service boundary: `interface Service` plus `class UserRepo extends Context.Service<UserRepo, Service>()(...)` plus `make` returning `UserRepo.of(...)` plus `Layer.effect(UserRepo, make)`.
 - Public or non-trivial internal service method: `Effect.fn("Domain.operation")`.
 - Runtime configuration: `Config` recipes read in layers; override with `ConfigProvider` in tests.
 - Event source: `Stream` consumed with `Stream.runForEach(...)` and forked with `Effect.forkScoped` in the owning layer.
