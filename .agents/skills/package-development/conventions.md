@@ -1,7 +1,8 @@
 # Package conventions
 
-Internal packages use the `@repo/*` scope. The scope is a constant rather than the project
-name, so a scaffolded repo renames nothing and no import is ever half-renamed.
+Private packages use the `@repo/*` scope. The scope is a constant rather than the project
+name, so a scaffolded repo renames nothing and no import is ever half-renamed. A public package
+moves to the repo's npm scope, which [`registration.md`](./registration.md) covers.
 
 ## Inside a package
 

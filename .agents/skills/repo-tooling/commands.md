@@ -16,9 +16,9 @@ vp check      # Vite+'s built-in check
 ```
 
 The `check` and `lint` scripts wrap `vp` in `effect-tsgo --tsrs-lint`, which preloads the
-patched Oxlint binding carrying the Effect rules and runs the type-aware rules and the typecheck
-on tsrs, the version pinned in `package.json`. Running those built-ins skips the wrapper and fails with
-`Unknown plugin: 'effecttsgo'`, measured on both. `format`, `format:check` and `test` need no
+patched Oxlint binding carrying the Effect rules, and runs the type-aware rules and the
+typecheck on the tsrs pinned in the `tooling` catalog. Running those built-ins skips the
+wrapper and fails with `Unknown plugin: 'effecttsgo'`, measured on both. `format`, `format:check` and `test` need no
 wrapper, so reaching for `vpr` everywhere is simpler than remembering which do.
 
 Run a single TypeScript file with `vpx path/to/file.ts`. It handles enums, decorators, JSX and
@@ -48,8 +48,8 @@ so moving a script to a task means deleting the script.
 
 ## Verifying work
 
-`vpr check` runs formatting, linting, typechecking and `vpr cli pkg sync --check`. `vpr test` runs the tests. Those two are
-the only gates in this repo, since there is no CI.
+`vpr check` runs formatting, linting, typechecking and `vpr cli pkg sync --check`. `vpr test`
+runs the tests. Those two are the only gates in this repo, since there is no CI.
 
 Run both. A passing typecheck says nothing about whether the code runs, and `vpr test` is what
 executes it.

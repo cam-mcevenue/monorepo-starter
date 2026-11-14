@@ -2,8 +2,8 @@
 
 This repo combines two things. The `plugins` block in `tsconfig.effect.json` comes from
 Effect's own repo, which runs plain `tsc`. `oxlint.config.ts` configures Oxlint, which
-`vpr check` runs through Vite+. Both involve the same Effect language service, and each file owns a different part
-of it.
+`vpr check` runs through Vite+. Both involve the same Effect language service, and each file
+owns a different part of it.
 
 ## The split
 
@@ -14,7 +14,7 @@ whole repo shares goes in `tsconfig.effect.json`; a fact one package needs goes 
 package's own `tsconfig.json`, which merges with the base.
 
 **`oxlint.config.ts` decides which rules run and how loudly.** Severities, the preset to extend,
-and per-path exceptions through `lint.overrides`.
+and per-path exceptions through `overrides`.
 
 Put a severity in `oxlint.config.ts`. Put a project fact in the tsconfig plugin block.
 
@@ -63,22 +63,14 @@ the project fact it needs. If a rule looks dead, check the plugin options before
 
 ## What `vpr check` reads
 
-Only the Oxlint side. Severities in `diagnosticSeverity` never reach it, because wrapping `vp`
-in `effect-tsgo` patches the Oxlint it starts and nothing else. The typecheck phase inside
-`vp check` runs stock tsgo, which does not load the `plugins` block.
+Both sides. The Oxlint run reports the `effecttsgo(...)` rules, and the typecheck runs the
+Effect-patched tsrs, which loads the `plugins` block. Measured with `diagnostics: true` on an
+arrow returning `Effect.gen`: each finding appeared twice, as `typescript(TS377047) …
+effect(effectFnOpportunity)` and as `effecttsgo(effect-fn-opportunity)`. `diagnostics: false`
+is what keeps it to one, in `vpr check` as well as in the editor.
 
-Measured, before `diagnostics` was switched off:
-
-```
-vpr check          ⚠ effecttsgo(effect-fn-opportunity)                  exit 0
-effect-tsgo tsc -b error TS377047 ... effect(effectFnOpportunity)       exit 1
-```
-
-Nothing in `package.json` runs `effect-tsgo tsc`, so `diagnosticSeverity` shaped the editor and
-nothing else. That is why those settings are gone.
-
-Oxlint warnings do not fail `vpr check` either. It exits 0 with warnings present, so a rule
-that must block needs `"error"`.
+Oxlint warnings do not fail `vpr check`. It exits 0 with warnings present, so a rule that must
+block needs `"error"`.
 
 ## Prefer an allowlist over a path exception
 
