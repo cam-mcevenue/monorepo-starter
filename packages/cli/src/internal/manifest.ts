@@ -17,7 +17,8 @@ export const Manifest = Schema.Struct({
   peerDependencies: Dependencies,
   devDependencies: Dependencies,
   publishConfig: Schema.optional(Schema.JsonObject),
-  repo: Schema.optional(Schema.Struct({ npmScope: Schema.optional(Schema.String) })),
+  /** This repo's own settings, which npm and pnpm ignore. */
+  monorepoSettings: Schema.optional(Schema.Struct({ npmScope: Schema.optional(Schema.String) })),
 });
 export interface Manifest extends Schema.Schema.Type<typeof Manifest> {}
 

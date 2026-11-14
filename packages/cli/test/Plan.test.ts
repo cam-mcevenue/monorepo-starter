@@ -39,7 +39,12 @@ const buildConfigFragment = `{
 
 const snapshot = (...members: ReadonlyArray<Member>): Snapshot => ({
   members: [
-    member("", "root", { name: "monorepo", private: true, repo: { npmScope: "@acme" } }, undefined),
+    member(
+      "",
+      "root",
+      { name: "monorepo", private: true, monorepoSettings: { npmScope: "@acme" } },
+      undefined,
+    ),
     ...members,
   ],
   fragments: {
@@ -215,7 +220,19 @@ describe("planSync", () => {
     });
   });
 
-  it("asks for repo.npmScope only once a public package exists", () => {
+  it("flags a public package named outside the scope, as a fix to make by hand", () => {
+    const stray = publicPackage("packages/foo", { name: "@other/foo" });
+    const synced = publicPackage("packages/foo", editedManifest(snapshot(stray), "packages/foo"));
+    expect(planSync(snapshot(synced), path).findings).toEqual([
+      {
+        path: "packages/foo/package.json",
+        problem: "public package @other/foo is outside the repo's npm scope @acme",
+        fixable: false,
+      },
+    ]);
+  });
+
+  it("asks for monorepoSettings.npmScope only once a public package exists", () => {
     const unscoped = (...members: ReadonlyArray<Member>): Snapshot => {
       const base = snapshot(...members);
       return {
@@ -236,7 +253,7 @@ describe("planSync", () => {
     expect(planSync(unscoped(synced), path).findings).toEqual([
       {
         path: "package.json",
-        problem: 'public packages exist but "repo": { "npmScope" } is not set',
+        problem: 'public packages exist but "monorepoSettings": { "npmScope" } is not set',
         fixable: false,
       },
     ]);
@@ -250,7 +267,7 @@ describe("planSync", () => {
  */
 const workspaceOf = (
   files: Record<string, JsonObject | string>,
-  root: JsonObject = { name: "monorepo", private: true, repo: { npmScope: "@acme" } },
+  root: JsonObject = { name: "monorepo", private: true, monorepoSettings: { npmScope: "@acme" } },
 ) => {
   const all: Record<string, JsonObject | string> = { "package.json": root, ...files };
   const text = (contents: JsonObject | string) =>
@@ -487,7 +504,7 @@ describe("a scope given for a repo that has none", () => {
         name: "monorepo",
         private: true,
         scripts: { x: "@given/foo" },
-        repo: { npmScope: "@given" },
+        monorepoSettings: { npmScope: "@given" },
       });
     }),
   );
@@ -511,7 +528,7 @@ describe("a scope given for a repo that has none", () => {
         scope,
       );
       expect(plan.packageName).toBe("@given/widget");
-      expect(writtenJson(plan, "package.json").repo).toEqual({ npmScope: "@given" });
+      expect(writtenJson(plan, "package.json").monorepoSettings).toEqual({ npmScope: "@given" });
     }),
   );
 

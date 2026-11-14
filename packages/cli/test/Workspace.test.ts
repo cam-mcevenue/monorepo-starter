@@ -19,7 +19,7 @@ const fixture = Effect.fnUntraced(function* (files: Record<string, JsonObject | 
   const root = yield* fs.makeTempDirectoryScoped({ prefix: "cli-workspace-" });
   const all: Record<string, JsonObject | string> = {
     "pnpm-workspace.yaml": "packages:\n  - packages/*\n",
-    "package.json": { name: "monorepo", private: true, repo: { npmScope: "@acme" } },
+    "package.json": { name: "monorepo", private: true, monorepoSettings: { npmScope: "@acme" } },
     ...files,
   };
   for (const [file, contents] of Object.entries(all)) {

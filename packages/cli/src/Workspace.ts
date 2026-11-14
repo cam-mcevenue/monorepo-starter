@@ -65,7 +65,7 @@ export interface Service {
   /** Template names `pkg add` offers. */
   readonly templates: Effect.Effect<ReadonlyArray<string>, FileSystemFailure>;
   readonly template: (name: string) => Effect.Effect<Template, UnknownTemplate | FileSystemFailure>;
-  /** The repo's `repo.npmScope`, when one is set. */
+  /** The root manifest's `monorepoSettings.npmScope`, when one is set. */
   readonly npmScope: Effect.Effect<string | undefined, LoadError>;
   /** Private `packages/<name>` members `pkg make-public` may convert. */
   readonly privatePackages: Effect.Effect<ReadonlyArray<string>, LoadError>;

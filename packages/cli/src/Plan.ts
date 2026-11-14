@@ -116,7 +116,8 @@ export const PACKAGES_DIR = "packages";
 /** The dev CLI itself: removing or publishing it with itself is never what you meant. */
 export const PROTECTED_PACKAGES: ReadonlyArray<string> = ["cli"];
 
-export const NPM_SCOPE_UNSET = 'public packages exist but "repo": { "npmScope" } is not set';
+export const NPM_SCOPE_UNSET =
+  'public packages exist but "monorepoSettings": { "npmScope" } is not set';
 
 const repoPath = (path: PathOps, ...segments: ReadonlyArray<string>) =>
   RepoPath.make(path.join(...segments));
@@ -125,9 +126,9 @@ const manifestPath = (path: PathOps, member: Member) => repoPath(path, member.di
 
 export const isPrivate = (member: Member) => member.manifest.private === true;
 
-/** The npm scope public packages publish under, from the root manifest's `repo.npmScope`. */
+/** The npm scope public packages publish under, from the root manifest's `monorepoSettings.npmScope`. */
 export const npmScope = (snapshot: Snapshot): string | undefined =>
-  snapshot.members.find((member) => member.kind === "root")?.manifest.repo?.npmScope;
+  snapshot.members.find((member) => member.kind === "root")?.manifest.monorepoSettings?.npmScope;
 
 /** Every `<member>/package.json (<field>)` that lists `name`, in any dependency field. */
 export const dependentsOf = (
@@ -195,6 +196,7 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
       member.manifest.name === undefined ? [] : [[member.manifest.name, member] as const],
     ),
   );
+  const scope = npmScope(snapshot);
   const steps: Array<Step> = [];
   const findings: Array<Finding> = [];
   for (const member of snapshot.members) {
@@ -212,6 +214,15 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
     if (JSON.stringify(json) !== JSON.stringify(member.json)) {
       steps.push(Step.Write({ path: manifest, contents: serialize(json) }));
       findings.push({ path: manifest, problem: "package.json is out of sync", fixable: true });
+    }
+    // The scope is the single source of truth once set; moving a package into it is a rename, by hand.
+    const name = member.manifest.name;
+    if (scope !== undefined && name !== undefined && !name.startsWith(`${scope}/`)) {
+      findings.push({
+        path: manifest,
+        problem: `public package ${name} is outside the repo's npm scope ${scope}`,
+        fixable: false,
+      });
     }
 
     const workspaceDeps = dependencyNames(member.manifest, BUILD_DEPENDENCY_FIELDS).flatMap(
@@ -252,7 +263,7 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
     }
   }
   const anyPublic = snapshot.members.some((m) => m.kind !== "root" && !isPrivate(m));
-  if (anyPublic && npmScope(snapshot) === undefined) {
+  if (anyPublic && scope === undefined) {
     findings.push({
       path: RepoPath.make("package.json"),
       problem: NPM_SCOPE_UNSET,
@@ -327,7 +338,7 @@ type Draft = ReturnType<typeof makeDraft>;
 /**
  * The scope a public package is named into: the repo's own, or `given` when
  * the repo has none yet, in which case the plan also records it in the root
- * manifest as `repo.npmScope`.
+ * manifest as `monorepoSettings.npmScope`.
  */
 const resolveScope = Effect.fnUntraced(function* (
   draft: Draft,
@@ -345,11 +356,11 @@ const resolveScope = Effect.fnUntraced(function* (
   if (root === undefined) {
     return yield* new PackageNotFound({ dir: "package.json" });
   }
-  const current = root.json["repo"];
-  const repo: JsonObject = isObject(current) ? current : {};
+  const current = root.json["monorepoSettings"];
+  const settings: JsonObject = isObject(current) ? current : {};
   yield* draft.write(
     manifestPath(path, root),
-    serialize({ ...root.json, repo: { ...repo, npmScope: given } }),
+    serialize({ ...root.json, monorepoSettings: { ...settings, npmScope: given } }),
   );
   return given;
 });

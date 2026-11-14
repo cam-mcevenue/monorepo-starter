@@ -21,7 +21,7 @@ layer(NodeServices.layer)("Toolchain", (it) => {
         "package.json": JSON.stringify({
           name: "monorepo",
           private: true,
-          repo: { npmScope: "@acme" },
+          monorepoSettings: { npmScope: "@acme" },
         }),
         "packages/foo/package.json": JSON.stringify({
           name: "@acme/foo",

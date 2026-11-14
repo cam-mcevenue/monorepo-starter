@@ -116,7 +116,7 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
 
 const SCOPE_EXPLAINER = `Public packages publish to npm under a scope, such as @your-org.
 This repo has none set yet, so pkg will add
-  "repo": { "npmScope": "<your answer>" }
+  "monorepoSettings": { "npmScope": "<your answer>" }
 to the root package.json, and name every public package <scope>/<name>.`;
 
 /**
