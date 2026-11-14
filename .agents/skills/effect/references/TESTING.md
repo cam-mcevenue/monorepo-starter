@@ -37,7 +37,7 @@ it.effect("advances virtual time", () =>
 ```ts
 it.effect("finds a user", () =>
   Effect.gen(function* () {
-    const users = yield* UserRepo.Service
+    const users = yield* UserRepo.UserRepo
     const result = yield* users.find(UserId.make("u1"))
     expect(Option.isSome(result)).toBe(true)
   }).pipe(Effect.provide(UserRepo.testLayer)),
@@ -77,23 +77,23 @@ it.effect("publishes exactly once", () =>
 
 ## First-Class App Test Stubs
 
-Use `TestInterface extends Interface`, `TestService`, and `testLayer` for reusable/stateful fakes.
+Use `TestService extends Service`, a `NotifierTest` tag, and `testLayer` for reusable/stateful fakes.
 
 ```ts
-export interface Interface {
+export interface Service {
   readonly send: (message: Message) => Effect.Effect<void, SendError>
 }
 
-export class Service extends Context.Service<Service, Interface>()(
+export class Notifier extends Context.Service<Notifier, Service>()(
   "@app/Notifier",
 ) {}
 
-export interface TestInterface extends Interface {
+export interface TestService extends Service {
   readonly sentMessages: () => Effect.Effect<ReadonlyArray<Message>>
   readonly failNextSend: (error: SendError) => Effect.Effect<void>
 }
 
-export class TestService extends Context.Service<TestService, TestInterface>()(
+export class NotifierTest extends Context.Service<NotifierTest, TestService>()(
   "@app/Notifier/Test",
 ) {}
 
@@ -102,7 +102,7 @@ export const testLayer = Layer.effectContext(
     const sent = yield* Ref.make<ReadonlyArray<Message>>([])
     const nextFailure = yield* Ref.make<Option.Option<SendError>>(Option.none())
 
-    const service = TestService.of({
+    const service = NotifierTest.of({
       send: Effect.fn("Notifier.Test.send")(function* (message) {
         const failure = yield* Ref.getAndSet(nextFailure, Option.none())
         if (Option.isSome(failure)) return yield* Effect.fail(failure.value)
@@ -117,8 +117,8 @@ export const testLayer = Layer.effectContext(
     })
 
     return Context.empty().pipe(
-      Context.add(Service, service),
-      Context.add(TestService, service),
+      Context.add(Notifier, service),
+      Context.add(NotifierTest, service),
     )
   }),
 )
@@ -126,9 +126,9 @@ export const testLayer = Layer.effectContext(
 
 Guidance:
 
-- The same object should back both the real `Service` tag and `TestService` tag.
+- The same object should back both the real `Notifier` tag and the `NotifierTest` tag.
 - Production code depends only on the real service tag.
-- Tests use `TestService` for control and inspection.
+- Tests use `NotifierTest` for control and inspection.
 - Use function-valued service members, including zero-argument operations, so `Effect.fn` fits naturally.
 - Use `Layer.succeed` for complete dead-simple static test implementations.
 - Use `Layer.mock` only for tiny local partial mocks where omitted members should fail loudly if used.
@@ -137,4 +137,4 @@ Guidance:
 
 Use `ConfigProvider.layer(ConfigProvider.fromUnknown(...))` when the test should exercise Config decoding.
 
-Use `Layer.succeed(AppConfiguration.Service, config)` when the app wraps decoded config in its own service and the test does not need to exercise env decoding.
+Use `Layer.succeed(AppConfiguration, config)` when the app wraps decoded config in its own service and the test does not need to exercise env decoding.

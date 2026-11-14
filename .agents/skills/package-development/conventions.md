@@ -29,7 +29,7 @@ The boundary is enforced by the `exports` map, not by convention:
 `./*` because a longer literal prefix beats a wildcard, so the block holds regardless of
 ordering.
 
-Tests reach internals through the package name, `@repo/cli/internal/scaffold`, which needs a
+Tests reach internals through the package name, `@repo/cli/internal/tsconfig`, which needs a
 typecheck alias and a runtime alias side by side. [`typescript.md`](./typescript.md) covers
 the pair.
 
@@ -43,7 +43,7 @@ The template's test carries a type-only assertion that the block still works:
 
 ```ts
 // @ts-expect-error internals are not importable across the package boundary
-export type BoundaryGuard = typeof import("@repo/pkg-effect/internal/greeting");
+export type BoundaryGuard = typeof import("@repo/pkg-effect/internal/format");
 ```
 
 If the `exports` map ever stops blocking internals, that suppression becomes unused and

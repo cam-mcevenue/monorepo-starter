@@ -21,6 +21,8 @@
           "effect/Path",
           "effect/PlatformError",
           "effect/process",
+          "effect/Stdio",
+          "effect/testing",
           "@effect/platform-node"
         ]
       }

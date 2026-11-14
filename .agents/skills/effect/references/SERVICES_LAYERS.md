@@ -4,69 +4,67 @@ Use this when defining service tags, module surfaces, layer implementations, run
 
 ## Module Surface
 
-One opinionated application-module style uses file-local role names and one canonical ES module namespace projection. Follow the existing codebase's module style when it has one; this convention is not required by Effect.
+Write service modules the way Effect's own packages do, for example
+`@effect/ai-anthropic`'s `AnthropicClient.ts`: the shape is an interface named `Service`, the
+tag is a class named after the module, `make` builds the implementation, and `layer` provides it.
 
 ```ts
-export interface Interface {
+// UserRepo.ts
+export interface Service {
   readonly get: (id: UserId) => Effect.Effect<User, NotFound | PersistenceError>
 }
 
-export class Service extends Context.Service<Service, Interface>()(
+export class UserRepo extends Context.Service<UserRepo, Service>()(
   "@app/UserRepo",
 ) {}
 
-export const layer = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient
+export const make = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient
 
-    const get = Effect.fn("UserRepo.get")(function* (id: UserId) {
-      // ...
-    })
+  const get = Effect.fn("UserRepo.get")(function* (id: UserId) {
+    // ...
+  })
 
-    return Service.of({ get })
-  }),
-)
+  return UserRepo.of({ get })
+})
+
+export const layer = Layer.effect(UserRepo, make)
 
 export class NotFound extends Schema.TaggedError<NotFound>()(
   "UserRepo.NotFound",
   { id: UserId },
 ) {}
-
-export * as UserRepo from "./user-repo.js"
 ```
 
-Consumers use the module namespace.
+Consumers import the module as a namespace, so the tag reads `UserRepo.UserRepo` and the
+rest of the surface `UserRepo.layer`, `UserRepo.NotFound`, `UserRepo.Service`.
 
 ```ts
-import { UserRepo } from "./user-repo.js"
+import * as UserRepo from "./UserRepo.ts"
 
 const program = Effect.gen(function* () {
-  const repo = yield* UserRepo.Service
+  const repo = yield* UserRepo.UserRepo
   return yield* repo.get(id)
 })
 ```
 
-The self-export is deliberate. It lets the file remain the module while giving every consumer the same domain-first name, without a TypeScript `namespace`, wrapper object, or repeated consumer-side aliases.
+A package barrel relays each module as a namespace, as Effect's `index.ts` files do:
 
 ```ts
-// Sibling module: import the owning leaf directly.
-import { UserRepo } from "./user-repo.js"
-
-// Folder or package barrel: relay the identity established by the leaf.
-export { UserRepo } from "./user-repo.js"
+// index.ts
+export * as UserRepo from "./UserRepo.ts"
 ```
 
 Guidance:
 
-- Do not name the tag class `UserRepo` inside `user-repo.ts`; the module namespace is the domain name.
-- In this module style, single-file modules self-export their canonical namespace at the bottom: `export * as UserRepo from "./user-repo.js"`.
-- Sibling modules import that namespace from the owning leaf; they do not import through their own aggregate barrel.
-- Folder and package barrels relay established leaf identities with `export { UserRepo } from "./user-repo.js"`.
-- The resulting `UserRepo.UserRepo === UserRepo` self-reference is unusual. Use this pattern only where the runtime and toolchain support it; otherwise use named exports or a separate barrel.
+- Name the module file and the tag class after the domain concept, `UserRepo.ts` and `class UserRepo`.
+- Name the shape `Service`. A test double's richer shape extends it, as `TestService`.
+- Check implementations with `Tag.of({ ... })`, which types the object against `Service` without a return annotation.
+- Export `make` when the implementation is effectful, and build `layer` from it; take parameters as `make(options)` and `layer(options)`.
+- Do not self-export a module's namespace from inside the module (`export * as UserRepo from "./UserRepo.ts"` at its bottom). Callers write `import * as UserRepo`, and the barrel does the relaying.
+- Sibling modules import each other's module directly, not through their own package barrel.
 - Export only intentional surface; keep local schemas, row codecs, helpers, and implementation details unexported.
 - Do not introduce TypeScript `namespace` declarations for organization.
-- Use a named service class such as `class UserRepo extends Context.Service...` when an external library or existing codebase does not use module namespace style.
 
 ## Layer Constructors
 
@@ -93,7 +91,7 @@ A layer that starts a stream, listener, worker, subscription, or forever loop mu
 ```ts
 export const layer = Layer.effectDiscard(
   Effect.gen(function* () {
-    const events = yield* Events.Service
+    const events = yield* Events.Events
 
     yield* events.stream.pipe(
       Stream.runForEach(handleEvent),

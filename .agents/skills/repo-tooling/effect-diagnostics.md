@@ -83,7 +83,7 @@ package or module subtree such as `effect/cli`, or a single export written
 everywhere, and anything unstable that is not on the list still warns, including inside the CLI.
 
 Switching the rule off for `packages/cli/**` would have done the same job and hidden more. Going
-through the allowlist surfaced `effect/PlatformError`, an unstable import in `scaffold.ts` that
+through the allowlist surfaced `effect/PlatformError`, an unstable import in the CLI that
 a path exception would have silenced without ever naming.
 
 The same pattern exists for neighbouring rules: `allowedExperimentalApis` for
@@ -121,7 +121,7 @@ listed in `allowedUnstableApis`, split by who needs them:
 | Config | Allows | Because |
 | --- | --- | --- |
 | `tsconfig.effect.json` | `@effect/vitest` | every package's tests import it |
-| `packages/cli/tsconfig.json` | `@effect/vitest`, `effect/cli`, `effect/FileSystem`, `effect/Path`, `effect/PlatformError`, `effect/process`, `@effect/platform-node` | only the CLI reaches for these |
+| `packages/cli/tsconfig.json` | `@effect/vitest`, `effect/cli`, `effect/FileSystem`, `effect/Path`, `effect/PlatformError`, `effect/process`, `effect/Stdio`, `effect/testing`, `@effect/platform-node` | only the CLI reaches for these |
 
 A package's own `plugins` entry **merges** with the base key by key. The CLI declares only its
 allowlist and still inherits `diagnostics: false` and `effectFn`, which was measured: an arrow

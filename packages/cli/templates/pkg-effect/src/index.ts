@@ -1,7 +1,6 @@
-import { Effect } from "effect";
-import { format } from "./internal/greeting.ts";
-
 /**
- * The public API of this package. Replace it with something real.
+ * The package's main entry point, re-exporting each module as a namespace.
+ * Every top-level module in `src/` is also its own entry point, so
+ * `import * as Greeter from "@repo/pkg-effect/Greeter"` reaches the same one.
  */
-export const greet = (name: string): Effect.Effect<string> => Effect.sync(() => format(name));
+export * as Greeter from "./Greeter.ts";
