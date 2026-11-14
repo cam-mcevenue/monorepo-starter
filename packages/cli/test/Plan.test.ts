@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as path from "node:path";
 import { Effect, Schema } from "effect";
 import { type JsonObject, Manifest } from "@repo/cli/internal/manifest";
-import { PackageName, RepoPath } from "@repo/cli/Model";
+import { NpmScope, PackageName, RepoPath } from "@repo/cli/Model";
 import {
   type Member,
   type Plan,
@@ -466,6 +466,62 @@ describe("planRemove", () => {
       expect((yield* Effect.flip(planRemove(snap, name("ghost"), path)))._tag).toBe(
         "PackageNotFound",
       );
+    }),
+  );
+});
+
+describe("a scope given for a repo that has none", () => {
+  const unscopedRoot: JsonObject = { name: "monorepo", private: true, scripts: { x: "@repo/foo" } };
+  const scope = NpmScope.make("@given");
+
+  it.effect("make-public records it in the root manifest, which the rename then keeps", () =>
+    Effect.gen(function* () {
+      const { snapshot: snap, sources } = workspaceOf(
+        { "packages/foo/package.json": { name: "@repo/foo", private: true } },
+        unscopedRoot,
+      );
+      const plan = yield* planMakePublic(snap, sources, name("foo"), path, scope);
+      expect(plan.to).toBe("@given/foo");
+      // The root script names the package, so the rename rewrote the root too.
+      expect(writtenJson(plan, "package.json")).toEqual({
+        name: "monorepo",
+        private: true,
+        scripts: { x: "@given/foo" },
+        repo: { npmScope: "@given" },
+      });
+    }),
+  );
+
+  it.effect("add names the package into it, and records it", () =>
+    Effect.gen(function* () {
+      const { snapshot: snap } = workspaceOf({}, { name: "monorepo", private: true });
+      const template: Template = {
+        name: "pkg-lib",
+        dir: "/repo/packages/cli/templates/pkg-lib",
+        files: new Map([["package.json", '{ "name": "@repo/template", "private": true }']]),
+        pruned: [],
+      };
+      const plan = yield* planCreate(
+        snap,
+        template,
+        name("widget"),
+        "public",
+        "/repo",
+        path,
+        scope,
+      );
+      expect(plan.packageName).toBe("@given/widget");
+      expect(writtenJson(plan, "package.json").repo).toEqual({ npmScope: "@given" });
+    }),
+  );
+
+  it.effect("refuses one that differs from the repo's own", () =>
+    Effect.gen(function* () {
+      const { snapshot: snap, sources } = workspaceOf({
+        "packages/foo/package.json": { name: "@repo/foo", private: true },
+      });
+      const error = yield* Effect.flip(planMakePublic(snap, sources, name("foo"), path, scope));
+      expect(error).toMatchObject({ _tag: "ScopeMismatch", configured: "@acme", given: "@given" });
     }),
   );
 });

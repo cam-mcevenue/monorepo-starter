@@ -1,6 +1,6 @@
 import { Console, Effect, Option, Path, Stdio } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/cli";
-import { decodePackageName, type Visibility } from "../../Model.ts";
+import { decodeNpmScope, decodePackageName, type Visibility } from "../../Model.ts";
 import {
   ConflictingFlags,
   MissingInput,
@@ -32,6 +32,13 @@ const dryRunFlag = Flag.Boolean("dry-run").pipe(
 const installFlag = Flag.Boolean("install").pipe(
   Flag.withDescription("Run `vp install` afterwards to relink the workspace"),
   Flag.withDefault(true),
+);
+
+const npmScopeFlag = Flag.String("npm-scope").pipe(
+  Flag.withDescription(
+    "npm scope for public packages, recorded in the root package.json when the repo has none yet",
+  ),
+  Flag.optional,
 );
 
 /** Prompt, or fail naming `flag` when nobody is there to answer. */
@@ -107,6 +114,41 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
   );
 });
 
+const SCOPE_EXPLAINER = `Public packages publish to npm under a scope, such as @your-org.
+This repo has none set yet, so pkg will add
+  "repo": { "npmScope": "<your answer>" }
+to the root package.json, and name every public package <scope>/<name>.`;
+
+/**
+ * The scope to record for a repo that has none: `--npm-scope`, or a prompt
+ * that first says what the answer will change. `undefined` when the repo
+ * already has one, so the planner uses that.
+ */
+const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string>) {
+  if (Option.isSome(provided)) {
+    return yield* decodeNpmScope(provided.value);
+  }
+  const workspace = yield* Workspace.Service;
+  if ((yield* workspace.npmScope) !== undefined) {
+    return undefined;
+  }
+  const answer = yield* ask(
+    "--npm-scope",
+    Console.log(SCOPE_EXPLAINER).pipe(
+      Effect.andThen(
+        Prompt.run(
+          Prompt.String({
+            message: "npm scope?",
+            validate: (value) =>
+              decodeNpmScope(value).pipe(Effect.mapError((error) => error.message)),
+          }),
+        ),
+      ),
+    ),
+  );
+  return yield* decodeNpmScope(answer);
+});
+
 /** One line per step, with paths relative to the repo root. */
 const printPlan = Effect.fnUntraced(function* (plan: Plan) {
   const workspace = yield* Workspace.Service;
@@ -159,6 +201,7 @@ const add = Command.make(
       Flag.withDefault(false),
     ),
     dryRun: dryRunFlag,
+    npmScope: npmScopeFlag,
     install: installFlag,
   },
   (options) =>
@@ -176,7 +219,9 @@ const add = Command.make(
       const name = yield* resolveName(options.name);
       const visibility = yield* resolveVisibility(options.public, options.private);
 
-      const plan = yield* workspace.planCreate(template, name, visibility);
+      const scope = visibility === "public" ? yield* resolveScope(options.npmScope) : undefined;
+
+      const plan = yield* workspace.planCreate(template, name, visibility, scope);
       yield* carryOut(
         plan,
         options,
@@ -189,7 +234,7 @@ const add = Command.make(
 
 const makePublic = Command.make(
   "make-public",
-  { name: nameArgument, dryRun: dryRunFlag, install: installFlag },
+  { name: nameArgument, npmScope: npmScopeFlag, dryRun: dryRunFlag, install: installFlag },
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Service;
@@ -202,7 +247,7 @@ const makePublic = Command.make(
           "private packages in packages/",
         ),
       );
-      const plan = yield* workspace.planMakePublic(name);
+      const plan = yield* workspace.planMakePublic(name, yield* resolveScope(options.npmScope));
       yield* carryOut(plan, options, Console.log(`${plan.from} is now public as ${plan.to}`));
     }),
 ).pipe(Command.withDescription("Make a private package in packages/ publishable to npm"));

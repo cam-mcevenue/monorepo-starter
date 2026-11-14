@@ -165,7 +165,32 @@ export class ScopeUnset extends Schema.TaggedError<ScopeUnset, { readonly brand:
   {},
 ) {
   override get message() {
-    return `Set the npm scope first: add "repo": { "npmScope": "@your-scope" } to the root package.json`;
+    return `Set the npm scope first: pass --npm-scope @your-scope, or add "repo": { "npmScope": "@your-scope" } to the root package.json`;
+  }
+  override get [CliError.userMessage]() {
+    return this.message;
+  }
+}
+
+export class InvalidScope extends Schema.TaggedError<
+  InvalidScope,
+  { readonly brand: unique symbol }
+>()("InvalidScope", { input: Schema.String }) {
+  override get message() {
+    return `"${this.input}" is not a valid npm scope — use a lowercase name such as "@your-org"`;
+  }
+  override get [CliError.userMessage]() {
+    return this.message;
+  }
+}
+
+/** `--npm-scope` names a different scope from the one the repo already has. */
+export class ScopeMismatch extends Schema.TaggedError<
+  ScopeMismatch,
+  { readonly brand: unique symbol }
+>()("ScopeMismatch", { configured: Schema.String, given: Schema.String }) {
+  override get message() {
+    return `This repo's npm scope is ${this.configured}, not ${this.given}: drop --npm-scope, or change "repo.npmScope" in the root package.json`;
   }
   override get [CliError.userMessage]() {
     return this.message;

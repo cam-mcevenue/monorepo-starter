@@ -43,7 +43,10 @@ vpr cli pkg make-public my-lib --dry-run   # list every file the rename would to
 ```
 
 Both need `"repo": { "npmScope": "@your-scope" }` in the root `package.json`, because nobody
-owns `@repo` on npm. `make-public` renames the package into that scope across every `.ts` and
+owns `@repo` on npm. In a repo without one, either command explains what it will record and
+prompts for the scope, or takes it as `--npm-scope @your-scope`. The answer is written to the
+root `package.json` as part of the same plan, so `--dry-run` shows it too. A scope that differs
+from one already set is refused rather than overwritten. `make-public` renames the package into that scope across every `.ts` and
 `.json` file in the workspace, drops `"private": true`, and runs `pkg sync`. The rename matches
 the exact name only, so a regex-escaped form such as `/^@repo\/foo\/(.*)$/` in a
 `resolve.alias` needs editing by hand.

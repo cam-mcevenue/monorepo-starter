@@ -16,7 +16,7 @@ Each command runs `vp install` afterwards to relink the workspace; `--no-install
 
 Without a terminal on stdin, as under an agent or the task runner, a command never prompts. It
 fails instead, naming the argument or flag to pass: `<name>`, `--template`, `--public` or
-`--private`, and `--yes` for `pkg rm`.
+`--private`, `--npm-scope` for a first public package, and `--yes` for `pkg rm`.
 
 `--public` makes the new package publishable; [`registration.md`](./registration.md) covers
 what that adds. Every check runs before anything is written, and a copy is removed again if a

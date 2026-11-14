@@ -5,7 +5,7 @@ import { Command } from "effect/cli";
 import { TestConsole } from "effect/testing";
 import { cli } from "@repo/cli";
 import { RepoPath } from "@repo/cli/Model";
-import { type Plan, type RemovePlan, Step } from "@repo/cli/Plan";
+import { type CreatePlan, type Plan, type RemovePlan, Step, type Template } from "@repo/cli/Plan";
 import { Workspace } from "@repo/cli/Workspace";
 
 /**
@@ -22,24 +22,37 @@ const removePlan: RemovePlan = {
   wasPublic: false,
 };
 
-const stub = () => {
+const template: Template = { name: "pkg-effect", dir: "/t", files: new Map(), pruned: [] };
+
+const createPlan: CreatePlan = {
+  steps: [],
+  findings: [],
+  packageName: "@acme/widget",
+  packagePath: RepoPath.make("packages/widget"),
+};
+
+const stub = (options: { readonly npmScope?: string } = {}) => {
   const applied: Array<Plan> = [];
+  /** The scope each `planCreate` call was given. */
+  const scopes: Array<string | undefined> = [];
   let installs = 0;
   const unused = Effect.die("not used by this test");
   const workspace = Workspace.Service.of({
     root: "/repo",
     templates: Effect.succeed(["pkg-effect"]),
-    template: () => unused,
+    template: () => Effect.succeed(template),
+    npmScope: Effect.succeed(options.npmScope),
     privatePackages: Effect.succeed([]),
     removablePackages: Effect.succeed(["foo"]),
     planSync: unused,
-    planCreate: () => unused,
+    planCreate: (_template, _name, _visibility, scope) =>
+      Effect.sync(() => (scopes.push(scope), createPlan)),
     planMakePublic: () => unused,
     planRemove: () => Effect.succeed(removePlan),
     apply: (plan) => Effect.sync(() => (applied.push(plan), [])),
     install: Effect.sync(() => void installs++),
   });
-  return { applied, installs: () => installs, workspace };
+  return { applied, scopes, installs: () => installs, workspace };
 };
 
 const run = (workspace: Workspace.Interface, args: ReadonlyArray<string>) =>
@@ -104,6 +117,35 @@ describe("pkg add", () => {
       const { workspace } = stub();
       const error = yield* Effect.flip(run(workspace, ["pkg", "add", "widget"]));
       expect(error).toMatchObject({ _tag: "MissingInput", flag: "--template" });
+    }),
+  );
+});
+
+describe("pkg add --public", () => {
+  const args = ["pkg", "add", "widget", "--template", "pkg-effect", "--public", "--no-install"];
+
+  it.effect("in a repo with no scope and no terminal, refuses naming --npm-scope", () =>
+    Effect.gen(function* () {
+      const { scopes, workspace } = stub();
+      const error = yield* Effect.flip(run(workspace, args));
+      expect(error).toMatchObject({ _tag: "MissingInput", flag: "--npm-scope" });
+      expect(scopes).toEqual([]);
+    }),
+  );
+
+  it.effect("--npm-scope is decoded, adding the @ when it was left off", () =>
+    Effect.gen(function* () {
+      const { scopes, workspace } = stub();
+      yield* run(workspace, [...args, "--npm-scope", "acme"]);
+      expect(scopes).toEqual(["@acme"]);
+    }),
+  );
+
+  it.effect("in a repo with a scope, asks nothing and leaves it to the repo's", () =>
+    Effect.gen(function* () {
+      const { scopes, workspace } = stub({ npmScope: "@acme" });
+      yield* run(workspace, args);
+      expect(scopes).toEqual([undefined]);
     }),
   );
 });

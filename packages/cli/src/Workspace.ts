@@ -8,7 +8,7 @@ import {
   WORKSPACE_PRUNE,
 } from "./internal/rename.ts";
 import { BUILD_CONFIG } from "./internal/tsconfig.ts";
-import { RepoPath, type PackageName, type Visibility } from "./Model.ts";
+import { type NpmScope, RepoPath, type PackageName, type Visibility } from "./Model.ts";
 import {
   AlreadyExists,
   type AlreadyPublic,
@@ -22,6 +22,7 @@ import {
   type PackageNotFound,
   type ProcessFailure,
   type ProtectedPackage,
+  type ScopeMismatch,
   type ScopeUnset,
   type UnexpectedOutput,
   UnknownTemplate,
@@ -31,6 +32,7 @@ import {
   type CreatePlan,
   type MakePublicPlan,
   type Member,
+  npmScope,
   type Plan,
   PACKAGES_DIR,
   planCreate,
@@ -63,24 +65,41 @@ export interface Interface {
   /** Template names `pkg add` offers. */
   readonly templates: Effect.Effect<ReadonlyArray<string>, FileSystemFailure>;
   readonly template: (name: string) => Effect.Effect<Template, UnknownTemplate | FileSystemFailure>;
+  /** The repo's `repo.npmScope`, when one is set. */
+  readonly npmScope: Effect.Effect<string | undefined, LoadError>;
   /** Private `packages/<name>` members `pkg make-public` may convert. */
   readonly privatePackages: Effect.Effect<ReadonlyArray<string>, LoadError>;
   /** `packages/<name>` members `pkg rm` may delete. */
   readonly removablePackages: Effect.Effect<ReadonlyArray<string>, LoadError>;
   readonly planSync: Effect.Effect<Plan, LoadError>;
+  /** `scope` names a repo that has none yet; the plan then records it in the root manifest. */
   readonly planCreate: (
     template: Template,
     name: PackageName,
     visibility: Visibility,
+    scope?: NpmScope,
   ) => Effect.Effect<
     CreatePlan,
-    LoadError | AlreadyExists | ScopeUnset | MissingName | DependsOnPrivate | PackageNotFound
+    | LoadError
+    | AlreadyExists
+    | ScopeUnset
+    | ScopeMismatch
+    | MissingName
+    | DependsOnPrivate
+    | PackageNotFound
   >;
   readonly planMakePublic: (
     name: PackageName,
+    scope?: NpmScope,
   ) => Effect.Effect<
     MakePublicPlan,
-    LoadError | PackageNotFound | AlreadyPublic | ScopeUnset | DependsOnPrivate | MissingName
+    | LoadError
+    | PackageNotFound
+    | AlreadyPublic
+    | ScopeUnset
+    | ScopeMismatch
+    | DependsOnPrivate
+    | MissingName
   >;
   readonly planRemove: (
     name: PackageName,
@@ -238,17 +257,21 @@ export const layerAt = (root: string) =>
         chosen: Template,
         name: PackageName,
         visibility: Visibility,
+        scope?: NpmScope,
       ) {
         // A directory that is not a workspace member still blocks the copy.
         const target = path.join(PACKAGES_DIR, name);
         if (yield* fs.exists(path.join(root, target)).pipe(fileSystemFailure("stat", target))) {
           return yield* new AlreadyExists({ dir: target });
         }
-        return yield* planCreate(yield* load(), chosen, name, visibility, root, path);
+        return yield* planCreate(yield* load(), chosen, name, visibility, root, path, scope);
       });
 
-      const planMakePublicIn = Effect.fn("Workspace.planMakePublic")(function* (name: PackageName) {
-        return yield* planMakePublic(yield* load(), yield* loadSources(), name, path);
+      const planMakePublicIn = Effect.fn("Workspace.planMakePublic")(function* (
+        name: PackageName,
+        scope?: NpmScope,
+      ) {
+        return yield* planMakePublic(yield* load(), yield* loadSources(), name, path, scope);
       });
 
       const planRemoveIn = Effect.fn("Workspace.planRemove")(function* (name: PackageName) {
@@ -293,6 +316,7 @@ export const layerAt = (root: string) =>
         root,
         templates,
         template,
+        npmScope: Effect.map(load(), npmScope),
         privatePackages: Effect.map(load(), (snapshot) => privatePackages(snapshot, path)),
         removablePackages: Effect.map(load(), (snapshot) => removablePackages(snapshot, path)),
         planSync: Effect.map(load(), (snapshot) => planSync(snapshot, path)),

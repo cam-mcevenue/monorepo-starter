@@ -4,6 +4,7 @@ import {
   BUILD_DEPENDENCY_FIELDS,
   decodeText,
   dependencyNames,
+  isObject,
   type JsonObject,
   type Manifest,
   serialize,
@@ -16,7 +17,7 @@ import {
   retargetExtends,
   spliceReferences,
 } from "./internal/tsconfig.ts";
-import { RepoPath, type PackageName, type Visibility } from "./Model.ts";
+import { type NpmScope, RepoPath, type PackageName, type Visibility } from "./Model.ts";
 import {
   AlreadyExists,
   AlreadyPublic,
@@ -25,6 +26,7 @@ import {
   MissingName,
   PackageNotFound,
   ProtectedPackage,
+  ScopeMismatch,
   ScopeUnset,
 } from "./PackageError.ts";
 
@@ -126,11 +128,6 @@ export const isPrivate = (member: Member) => member.manifest.private === true;
 /** The npm scope public packages publish under, from the root manifest's `repo.npmScope`. */
 export const npmScope = (snapshot: Snapshot): string | undefined =>
   snapshot.members.find((member) => member.kind === "root")?.manifest.repo?.npmScope;
-
-const requireScope = (snapshot: Snapshot): Effect.Effect<string, ScopeUnset> => {
-  const scope = npmScope(snapshot);
-  return scope === undefined ? Effect.fail(new ScopeUnset()) : Effect.succeed(scope);
-};
 
 /** Every `<member>/package.json (<field>)` that lists `name`, in any dependency field. */
 export const dependentsOf = (
@@ -297,6 +294,8 @@ const makeDraft = (initial: Snapshot, path: PathOps) => {
 
   return {
     snapshot: () => snapshot,
+    /** The text this plan has given `file` so far, if any. */
+    read: (file: RepoPath) => writes.get(file),
     write,
     copy: (from: string, to: RepoPath) => {
       structural.push(Step.Copy({ from, to }));
@@ -324,6 +323,36 @@ const makeDraft = (initial: Snapshot, path: PathOps) => {
 };
 
 type Draft = ReturnType<typeof makeDraft>;
+
+/**
+ * The scope a public package is named into: the repo's own, or `given` when
+ * the repo has none yet, in which case the plan also records it in the root
+ * manifest as `repo.npmScope`.
+ */
+const resolveScope = Effect.fnUntraced(function* (
+  draft: Draft,
+  path: PathOps,
+  given: NpmScope | undefined,
+) {
+  const configured = npmScope(draft.snapshot());
+  if (given === undefined) {
+    return configured ?? (yield* new ScopeUnset());
+  }
+  if (configured !== undefined) {
+    return configured === given ? configured : yield* new ScopeMismatch({ configured, given });
+  }
+  const root = draft.snapshot().members.find((member) => member.kind === "root");
+  if (root === undefined) {
+    return yield* new PackageNotFound({ dir: "package.json" });
+  }
+  const current = root.json["repo"];
+  const repo: JsonObject = isObject(current) ? current : {};
+  yield* draft.write(
+    manifestPath(path, root),
+    serialize({ ...root.json, repo: { ...repo, npmScope: given } }),
+  );
+  return given;
+});
 
 /** Refuse a member that would publish against a private workspace package. */
 const ensurePublishable = (snapshot: Snapshot, member: Member) => {
@@ -363,6 +392,7 @@ export const planMakePublic = Effect.fn("Plan.makePublic")(function* (
   sources: Sources,
   name: PackageName,
   path: PathOps,
+  scope?: NpmScope,
 ) {
   const dir = repoPath(path, PACKAGES_DIR, name);
   const target = snapshot.members.find((member) => member.dir === dir);
@@ -372,16 +402,18 @@ export const planMakePublic = Effect.fn("Plan.makePublic")(function* (
   if (!isPrivate(target)) {
     return yield* new AlreadyPublic({ dir });
   }
-  const scope = yield* requireScope(snapshot);
+  const draft = makeDraft(snapshot, path);
+  const resolved = yield* resolveScope(draft, path, scope);
   yield* ensurePublishable(snapshot, target);
   const from = target.manifest.name;
   if (from === undefined) {
     return yield* new MissingName({ path: manifestPath(path, target) });
   }
-  const to = `${scope}/${from.split("/").pop() ?? name}`;
+  const to = `${resolved}/${from.split("/").pop() ?? name}`;
 
-  const draft = makeDraft(snapshot, path);
-  for (const [file, contents] of sources) {
+  for (const [file, original] of sources) {
+    // Read through the draft: the scope may already have been written to the root manifest.
+    const contents = draft.read(file) ?? original;
     const renamed = renameText(contents, from, to);
     if (renamed !== contents) {
       yield* draft.write(file, renamed);
@@ -404,13 +436,17 @@ export const planCreate = Effect.fn("Plan.create")(function* (
   visibility: Visibility,
   root: string,
   path: PathOps,
+  scope?: NpmScope,
 ) {
   const packagePath = repoPath(path, PACKAGES_DIR, name);
   if (snapshot.members.some((member) => member.dir === packagePath)) {
     return yield* new AlreadyExists({ dir: packagePath });
   }
+  const draft = makeDraft(snapshot, path);
   const packageName =
-    visibility === "public" ? `${yield* requireScope(snapshot)}/${name}` : `@repo/${name}`;
+    visibility === "public"
+      ? `${yield* resolveScope(draft, path, scope)}/${name}`
+      : `@repo/${name}`;
 
   // The template's own package name is the string to repoint, so templates are
   // free to name themselves anything without the CLI knowing about it.
@@ -423,7 +459,6 @@ export const planCreate = Effect.fn("Plan.create")(function* (
     return yield* new MissingName({ path: path.join(template.dir, "package.json") });
   }
 
-  const draft = makeDraft(snapshot, path);
   draft.copy(template.dir, packagePath);
   for (const pruned of template.pruned) {
     draft.remove(repoPath(path, packagePath, pruned));
