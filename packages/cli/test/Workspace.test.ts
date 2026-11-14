@@ -119,8 +119,12 @@ layer(NodeServices.layer)("Workspace", (it) => {
           expect(manifest.publishConfig.exports["."]).toBe("./dist/index.js");
           expect(yield* exists(root, "packages/widget/node_modules")).toBe(false);
           expect(yield* exists(root, "packages/widget/tsconfig.build.json")).toBe(true);
-          expect(yield* read(root, "packages/widget/test/index.test.ts")).toContain(
+          expect(yield* read(root, "packages/widget/test/Greeter.test.ts")).toContain(
             'from "@acme/widget"',
+          );
+          // The template's name is repointed wherever it appears, service ids included.
+          expect(yield* read(root, "packages/widget/src/Greeter.ts")).toContain(
+            '"@acme/widget/Greeter"',
           );
         }),
       ),

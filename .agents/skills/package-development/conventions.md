@@ -43,7 +43,7 @@ The template's test carries a type-only assertion that the block still works:
 
 ```ts
 // @ts-expect-error internals are not importable across the package boundary
-export type BoundaryGuard = typeof import("@repo/pkg-effect/internal/greeting");
+export type BoundaryGuard = typeof import("@repo/pkg-effect/internal/format");
 ```
 
 If the `exports` map ever stops blocking internals, that suppression becomes unused and
