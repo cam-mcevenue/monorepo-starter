@@ -71,7 +71,7 @@ describe("pkg rm", () => {
     Effect.gen(function* () {
       const { applied, workspace } = stub();
       const error = yield* Effect.flip(run(workspace, ["pkg", "rm", "foo"]));
-      expect(error).toMatchObject({ _tag: "MissingInput", flag: "--yes" });
+      expect(error).toMatchObject({ _tag: "MissingInput", flags: ["--yes"] });
       expect(applied).toEqual([]);
     }),
   );
@@ -116,7 +116,7 @@ describe("pkg add", () => {
     Effect.gen(function* () {
       const { workspace } = stub();
       const error = yield* Effect.flip(run(workspace, ["pkg", "add", "widget"]));
-      expect(error).toMatchObject({ _tag: "MissingInput", flag: "--template" });
+      expect(error).toMatchObject({ _tag: "MissingInput", flags: ["--template"] });
     }),
   );
 });
@@ -128,7 +128,7 @@ describe("pkg add --public", () => {
     Effect.gen(function* () {
       const { scopes, workspace } = stub();
       const error = yield* Effect.flip(run(workspace, args));
-      expect(error).toMatchObject({ _tag: "MissingInput", flag: "--npm-scope" });
+      expect(error).toMatchObject({ _tag: "MissingInput", flags: ["--npm-scope"] });
       expect(scopes).toEqual([]);
     }),
   );

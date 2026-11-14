@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as path from "node:path";
 import { Effect, Schema } from "effect";
 import { type JsonObject, Manifest } from "@repo/cli/internal/manifest";
+import { type Message, plain } from "@repo/cli/internal/message";
 import { NpmScope, PackageName, RepoPath } from "@repo/cli/Model";
 import {
   type Member,
@@ -65,6 +66,12 @@ const publicPackage = (dir: string, json: JsonObject = {}): Member =>
     buildConfigFragment,
   );
 
+/** Findings with their messages as plain text, as logs and `--check` without a terminal show them. */
+const plainFindings = (findings: ReadonlyArray<{ readonly problem: Message }>) =>
+  findings.map((finding) => ({ ...finding, problem: plain(finding.problem) }));
+
+const findingsOf = (snap: Snapshot) => plainFindings(planSync(snap, path).findings);
+
 const writes = (snap: Snapshot) =>
   planSync(snap, path).steps.flatMap((step) => (step._tag === "Write" ? [step] : []));
 
@@ -115,7 +122,7 @@ describe("planSync", () => {
 
   it("reports an out-of-date manifest as fixable, then nothing once synced", () => {
     const stale = snapshot(publicPackage("packages/foo", { exports: { ".": "./src/index.ts" } }));
-    expect(planSync(stale, path).findings).toEqual([
+    expect(findingsOf(stale)).toEqual([
       { path: "packages/foo/package.json", problem: "package.json is out of sync", fixable: true },
     ]);
 
@@ -170,7 +177,7 @@ describe("planSync", () => {
       path: "packages/foo/tsconfig.build.json",
       contents: buildConfigFragment,
     });
-    expect(plan.findings).toContainEqual({
+    expect(plainFindings(plan.findings)).toContainEqual({
       path: "packages/foo/tsconfig.build.json",
       problem: "tsconfig.build.json is missing",
       fixable: true,
@@ -191,7 +198,7 @@ describe("planSync", () => {
       privatePackage("packages/secret"),
     );
     const plan = planSync(snap, path);
-    expect(plan.findings).toContainEqual({
+    expect(plainFindings(plan.findings)).toContainEqual({
       path: "packages/foo/package.json",
       problem: "depends on private workspace package @repo/secret",
       fixable: false,
@@ -203,39 +210,37 @@ describe("planSync", () => {
     const snap = snapshot(
       privatePackage("packages/old", { publishConfig: { access: "public" } }, buildConfigFragment),
     );
-    expect(planSync(snap, path)).toEqual({
-      steps: [],
-      findings: [
-        {
-          path: "packages/old/tsconfig.build.json",
-          problem: "private package has a build config; delete it or make the package public",
-          fixable: false,
-        },
-        {
-          path: "packages/old/package.json",
-          problem: "private package has publishConfig; delete it or make the package public",
-          fixable: false,
-        },
-      ],
-    });
+    expect(writes(snap)).toEqual([]);
+    expect(findingsOf(snap)).toEqual([
+      {
+        path: "packages/old/tsconfig.build.json",
+        problem: "private package has a build config; delete it or make the package public",
+        fixable: false,
+      },
+      {
+        path: "packages/old/package.json",
+        problem: "private package has publishConfig; delete it or make the package public",
+        fixable: false,
+      },
+    ]);
   });
 
   it("flags a public package named outside the scope, naming the rename to make by hand", () => {
     const findingFor = (name: string) => {
       const stray = publicPackage("packages/foo", { name });
       const synced = publicPackage("packages/foo", editedManifest(snapshot(stray), "packages/foo"));
-      return planSync(snapshot(synced), path).findings;
+      return findingsOf(snapshot(synced));
     };
     expect(findingFor("@acm/foo")).toEqual([
       {
         path: "packages/foo/package.json",
         problem:
-          'public package `@acm/foo` has scope `@acm`, which does not match `"monorepoSettings": { "npmScope": "@acme" }` in the root package.json; rename it to `@acme/foo`',
+          'public package @acm/foo has scope @acm, which does not match "monorepoSettings": { "npmScope": "@acme" } in the root package.json; rename it to @acme/foo',
         fixable: false,
       },
     ]);
     expect(findingFor("foo")[0]?.problem).toBe(
-      'public package `foo` has no scope, but `"monorepoSettings": { "npmScope": "@acme" }` in the root package.json sets one; rename it to `@acme/foo`',
+      'public package foo has no scope, but "monorepoSettings": { "npmScope": "@acme" } in the root package.json sets one; rename it to @acme/foo',
     );
   });
 
@@ -251,20 +256,20 @@ describe("planSync", () => {
         ),
       };
     };
-    expect(planSync(unscoped(privatePackage("packages/a")), path).findings).toEqual([]);
+    expect(findingsOf(unscoped(privatePackage("packages/a")))).toEqual([]);
 
     const synced = publicPackage(
       "packages/foo",
       editedManifest(snapshot(publicPackage("packages/foo")), "packages/foo"),
     );
-    expect(planSync(unscoped(synced), path).findings).toEqual([
+    expect(findingsOf(unscoped(synced))).toEqual([
       {
         path: "package.json",
         problem: 'public packages exist but "monorepoSettings": { "npmScope" } is not set',
         fixable: false,
       },
     ]);
-    expect(planSync(snapshot(synced), path).findings).toEqual([]);
+    expect(findingsOf(snapshot(synced))).toEqual([]);
   });
 });
 

@@ -10,6 +10,7 @@ import {
   serialize,
   withPublishFields,
 } from "./internal/manifest.ts";
+import { code, type Message, msg } from "./internal/message.ts";
 import { renameText, TEMPLATE_EXTENSIONS, hasExtension } from "./internal/rename.ts";
 import {
   BUILD_CONFIG,
@@ -73,7 +74,7 @@ export interface Template {
 export interface Finding {
   /** The file the finding is about. */
   readonly path: RepoPath;
-  readonly problem: string;
+  readonly problem: Message;
   /** `pkg sync` repairs it; otherwise it needs a decision made by hand. */
   readonly fixable: boolean;
 }
@@ -116,8 +117,7 @@ export const PACKAGES_DIR = "packages";
 /** The dev CLI itself: removing or publishing it with itself is never what you meant. */
 export const PROTECTED_PACKAGES: ReadonlyArray<string> = ["cli"];
 
-export const NPM_SCOPE_UNSET =
-  'public packages exist but "monorepoSettings": { "npmScope" } is not set';
+export const NPM_SCOPE_UNSET = msg`public packages exist but ${code('"monorepoSettings": { "npmScope" }')} is not set`;
 
 const repoPath = (path: PathOps, ...segments: ReadonlyArray<string>) =>
   RepoPath.make(path.join(...segments));
@@ -171,14 +171,14 @@ const privateLeftovers = (member: Member, path: PathOps): ReadonlyArray<Finding>
   if (member.buildConfig !== undefined) {
     leftovers.push({
       path: repoPath(path, member.dir, BUILD_CONFIG),
-      problem: `private package has a build config; ${advice}`,
+      problem: msg`private package has a build config; ${advice}`,
       fixable: false,
     });
   }
   if (member.manifest.publishConfig !== undefined) {
     leftovers.push({
       path: manifestPath(path, member),
-      problem: `private package has publishConfig; ${advice}`,
+      problem: msg`private package has ${code("publishConfig")}; ${advice}`,
       fixable: false,
     });
   }
@@ -186,14 +186,14 @@ const privateLeftovers = (member: Member, path: PathOps): ReadonlyArray<Finding>
 };
 
 /** Name the package's scope, the setting it should match, and the name to rename it to. */
-const outsideScope = (name: string, scope: string) => {
-  const [own, ...rest] = name.split("/");
-  const isScoped = own?.startsWith("@") === true && rest.length > 0;
-  const setting = `\`"monorepoSettings": { "npmScope": "${scope}" }\` in the root package.json`;
-  const renamed = `\`${scope}/${isScoped ? rest.join("/") : name}\``;
+const outsideScope = (name: string, scope: string): Message => {
+  const [own = "", ...rest] = name.split("/");
+  const isScoped = own.startsWith("@") && rest.length > 0;
+  const setting = msg`${code(`"monorepoSettings": { "npmScope": "${scope}" }`)} in the root ${code("package.json")}`;
+  const renamed = code(`${scope}/${isScoped ? rest.join("/") : name}`);
   return isScoped
-    ? `public package \`${name}\` has scope \`${own}\`, which does not match ${setting}; rename it to ${renamed}`
-    : `public package \`${name}\` has no scope, but ${setting} sets one; rename it to ${renamed}`;
+    ? msg`public package ${code(name)} has scope ${code(own)}, which does not match ${setting}; rename it to ${renamed}`
+    : msg`public package ${code(name)} has no scope, but ${setting} sets one; rename it to ${renamed}`;
 };
 
 /**
@@ -224,7 +224,11 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
     const json = withPublishFields(member.json, snapshot.fragments.manifest);
     if (JSON.stringify(json) !== JSON.stringify(member.json)) {
       steps.push(Step.Write({ path: manifest, contents: serialize(json) }));
-      findings.push({ path: manifest, problem: "package.json is out of sync", fixable: true });
+      findings.push({
+        path: manifest,
+        problem: msg`${code("package.json")} is out of sync`,
+        fixable: true,
+      });
     }
     // The scope is the single source of truth once set; moving a package into it is a rename, by hand.
     const name = member.manifest.name;
@@ -242,7 +246,7 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
       if (isPrivate(dependency)) {
         findings.push({
           path: manifest,
-          problem: `depends on private workspace package ${name}`,
+          problem: msg`depends on private workspace package ${code(name)}`,
           fixable: false,
         });
       }
@@ -263,8 +267,8 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
         path: buildConfigPath,
         problem:
           member.buildConfig === undefined
-            ? "tsconfig.build.json is missing"
-            : "references are out of sync",
+            ? msg`${code(BUILD_CONFIG)} is missing`
+            : msg`${code("references")} are out of sync`,
         fixable: true,
       });
     }

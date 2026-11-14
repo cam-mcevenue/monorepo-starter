@@ -1,19 +1,27 @@
 import { Effect, Schema, type PlatformError } from "effect";
 import { CliError } from "effect/cli";
+import { code, join, type Message, msg, plain } from "./internal/message.ts";
 
 /**
  * Every way a package operation can fail. Most are expected: the input or the
  * repo is wrong, and the user can fix it. Those carry `CliError.userMessage`,
- * so `Command.run` prints just the message and exits 1. `FileSystemFailure`,
- * `ProcessFailure` and `UnexpectedOutput` are not: something underneath broke,
- * so they keep their cause and print in full.
+ * so `Command.run` prints just the message and exits 1; the CLI's formatter
+ * renders their `text` instead, with the names in it emphasised on a terminal. `FileSystemFailure`, `ProcessFailure` and
+ * `UnexpectedOutput` are not: something underneath broke, so they keep their
+ * cause and print in full.
+ *
+ * Each expected error builds its text once, as `text`; `message` is that text
+ * plain, for logs, tests and the user message.
  */
 
 /** The file that marks the workspace root. */
 export const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
 /** Shown wherever a name is rejected, at the prompt as well as after it. */
-export const nameHint = 'use lowercase kebab-case, e.g. "my-package"';
+export const nameHint = msg`use lowercase kebab-case, e.g. ${code("my-package")}`;
+
+const scopeSetting = (scope: string) =>
+  msg`${code(`"monorepoSettings": { "npmScope": "${scope}" }`)} in the root ${code("package.json")}`;
 
 export class InvalidName extends Schema.TaggedError<
   InvalidName,
@@ -21,11 +29,14 @@ export class InvalidName extends Schema.TaggedError<
 >()("InvalidName", {
   input: Schema.String,
 }) {
+  get text(): Message {
+    return msg`${code(this.input)} is not a valid package name — ${nameHint}`;
+  }
   override get message() {
-    return `"${this.input}" is not a valid package name — ${nameHint}`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -35,11 +46,14 @@ export class NoWorkspaceRoot extends Schema.TaggedError<
 >()("NoWorkspaceRoot", {
   start: Schema.String,
 }) {
+  get text(): Message {
+    return msg`Could not find ${code(WORKSPACE_MARKER)} in ${code(this.start)} or any parent directory`;
+  }
   override get message() {
-    return `Could not find ${WORKSPACE_MARKER} in ${this.start} or any parent directory`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -50,11 +64,14 @@ export class UnknownTemplate extends Schema.TaggedError<
   template: Schema.String,
   available: Schema.Array(Schema.String),
 }) {
+  get text(): Message {
+    return msg`Unknown template ${code(this.template)}. Available: ${join(this.available.map(code), ", ")}`;
+  }
   override get message() {
-    return `Unknown template "${this.template}". Available: ${this.available.join(", ")}`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -65,25 +82,29 @@ export class NothingToChoose extends Schema.TaggedError<
 >()("NothingToChoose", {
   what: Schema.String,
 }) {
+  get text(): Message {
+    return msg`No ${this.what} found`;
+  }
   override get message() {
-    return `No ${this.what} found`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
 export class ConflictingFlags extends Schema.TaggedError<
   ConflictingFlags,
   { readonly brand: unique symbol }
->()("ConflictingFlags", {
-  flags: Schema.Array(Schema.String),
-}) {
+>()("ConflictingFlags", { flags: Schema.Array(Schema.String) }) {
+  get text(): Message {
+    return msg`Pass ${join(this.flags.map(code), " or ")}, not both`;
+  }
   override get message() {
-    return `Pass ${this.flags.join(" or ")}, not both`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -91,12 +112,18 @@ export class ConflictingFlags extends Schema.TaggedError<
 export class MissingInput extends Schema.TaggedError<
   MissingInput,
   { readonly brand: unique symbol }
->()("MissingInput", { flag: Schema.String }) {
+>()("MissingInput", {
+  /** Any one of these answers the prompt. */
+  flags: Schema.Array(Schema.String),
+}) {
+  get text(): Message {
+    return msg`stdin is not a terminal, so pass ${join(this.flags.map(code), " or ")} instead of answering a prompt`;
+  }
   override get message() {
-    return `stdin is not a terminal, so pass ${this.flag} instead of answering a prompt`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -106,11 +133,14 @@ export class PackageNotFound extends Schema.TaggedError<
 >()("PackageNotFound", {
   dir: Schema.String,
 }) {
+  get text(): Message {
+    return msg`${code(this.dir)} is not a workspace package`;
+  }
   override get message() {
-    return `${this.dir} is not a workspace package`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -120,11 +150,14 @@ export class AlreadyExists extends Schema.TaggedError<
 >()("AlreadyExists", {
   dir: Schema.String,
 }) {
+  get text(): Message {
+    return msg`${code(this.dir)} already exists`;
+  }
   override get message() {
-    return `${this.dir} already exists`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -132,14 +165,15 @@ export class AlreadyExists extends Schema.TaggedError<
 export class ProtectedPackage extends Schema.TaggedError<
   ProtectedPackage,
   { readonly brand: unique symbol }
->()("ProtectedPackage", {
-  dir: Schema.String,
-}) {
+>()("ProtectedPackage", { dir: Schema.String }) {
+  get text(): Message {
+    return msg`${code(this.dir)} is this CLI — delete it by hand if you really mean to`;
+  }
   override get message() {
-    return `${this.dir} is this CLI — delete it by hand if you really mean to`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -151,12 +185,18 @@ export class HasDependents extends Schema.TaggedError<
   /** Each as `<member>/package.json (<field>)`. */
   dependents: Schema.Array(Schema.String),
 }) {
+  get text(): Message {
+    const list = join(
+      this.dependents.map((dependent) => msg`  ${code(dependent)}`),
+      "\n",
+    );
+    return msg`${code(this.packageName)} is still a dependency. Remove it from these first:\n${list}`;
+  }
   override get message() {
-    const list = this.dependents.map((dependent) => `  ${dependent}`).join("\n");
-    return `${this.packageName} is still a dependency. Remove it from these first:\n${list}`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -164,11 +204,14 @@ export class ScopeUnset extends Schema.TaggedError<ScopeUnset, { readonly brand:
   "ScopeUnset",
   {},
 ) {
+  get text(): Message {
+    return msg`Set the npm scope first: pass ${code("--npm-scope @your-scope")}, or add ${scopeSetting("@your-scope")}`;
+  }
   override get message() {
-    return `Set the npm scope first: pass --npm-scope @your-scope, or add "monorepoSettings": { "npmScope": "@your-scope" } to the root package.json`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -176,11 +219,14 @@ export class InvalidScope extends Schema.TaggedError<
   InvalidScope,
   { readonly brand: unique symbol }
 >()("InvalidScope", { input: Schema.String }) {
+  get text(): Message {
+    return msg`${code(this.input)} is not a valid npm scope — use a lowercase name such as ${code("@your-org")}`;
+  }
   override get message() {
-    return `"${this.input}" is not a valid npm scope — use a lowercase name such as "@your-org"`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -189,11 +235,14 @@ export class ScopeMismatch extends Schema.TaggedError<
   ScopeMismatch,
   { readonly brand: unique symbol }
 >()("ScopeMismatch", { configured: Schema.String, given: Schema.String }) {
+  get text(): Message {
+    return msg`This repo's npm scope is ${code(this.configured)}, not ${code(this.given)}: drop ${code("--npm-scope")}, or change ${scopeSetting(this.configured)}`;
+  }
   override get message() {
-    return `This repo's npm scope is ${this.configured}, not ${this.given}: drop --npm-scope, or change "monorepoSettings.npmScope" in the root package.json`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -203,26 +252,29 @@ export class AlreadyPublic extends Schema.TaggedError<
 >()("AlreadyPublic", {
   dir: Schema.String,
 }) {
+  get text(): Message {
+    return msg`${code(this.dir)} is already public`;
+  }
   override get message() {
-    return `${this.dir} is already public`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
 export class DependsOnPrivate extends Schema.TaggedError<
   DependsOnPrivate,
   { readonly brand: unique symbol }
->()("DependsOnPrivate", {
-  dir: Schema.String,
-  dependencies: Schema.Array(Schema.String),
-}) {
+>()("DependsOnPrivate", { dir: Schema.String, dependencies: Schema.Array(Schema.String) }) {
+  get text(): Message {
+    return msg`${code(this.dir)} depends on private workspace packages, make them public first: ${join(this.dependencies.map(code), ", ")}`;
+  }
   override get message() {
-    return `${this.dir} depends on private workspace packages, make them public first: ${this.dependencies.join(", ")}`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -232,11 +284,14 @@ export class MissingName extends Schema.TaggedError<
 >()("MissingName", {
   path: Schema.String,
 }) {
+  get text(): Message {
+    return msg`${code(this.path)} has no ${code('"name"')} field`;
+  }
   override get message() {
-    return `${this.path} has no "name" field`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -248,11 +303,14 @@ export class InvalidManifest extends Schema.TaggedError<
   path: Schema.String,
   issue: Schema.String,
 }) {
+  get text(): Message {
+    return msg`${code(this.path)} is not a valid manifest: ${this.issue}`;
+  }
   override get message() {
-    return `${this.path} is not a valid manifest: ${this.issue}`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -263,11 +321,14 @@ export class OutOfSync extends Schema.TaggedError<OutOfSync, { readonly brand: u
     count: Schema.Int,
   },
 ) {
+  get text(): Message {
+    return msg`${code("pkg sync")}: ${this.count} problem${this.count === 1 ? "" : "s"} found`;
+  }
   override get message() {
-    return `pkg sync: ${this.count} problem${this.count === 1 ? "" : "s"} found`;
+    return plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return this.message;
+    return plain(this.text);
   }
 }
 
@@ -304,10 +365,7 @@ export class ProcessFailure extends Schema.TaggedError<
 export class UnexpectedOutput extends Schema.TaggedError<
   UnexpectedOutput,
   { readonly brand: unique symbol }
->()("UnexpectedOutput", {
-  command: Schema.String,
-  output: Schema.String,
-}) {
+>()("UnexpectedOutput", { command: Schema.String, output: Schema.String }) {
   override get message() {
     return `${this.command} printed unexpected output: ${this.output}`;
   }

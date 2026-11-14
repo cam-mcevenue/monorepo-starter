@@ -1,5 +1,6 @@
 import { Console, Effect, Option, Path, Stdio } from "effect";
-import { Argument, Command, Flag, Prompt } from "effect/cli";
+import { Argument, Command, Flag, Prompt, TerminalCapabilities } from "effect/cli";
+import { code, msg, plain, render } from "../message.ts";
 import { decodeNpmScope, decodePackageName, type Visibility } from "../../Model.ts";
 import {
   ConflictingFlags,
@@ -42,10 +43,13 @@ const npmScopeFlag = Flag.String("npm-scope").pipe(
 );
 
 /** Prompt, or fail naming `flag` when nobody is there to answer. */
-const ask = Effect.fnUntraced(function* <A, E, R>(flag: string, prompt: Effect.Effect<A, E, R>) {
+const ask = Effect.fnUntraced(function* <A, E, R>(
+  flags: ReadonlyArray<string>,
+  prompt: Effect.Effect<A, E, R>,
+) {
   const stdio = yield* Stdio.Stdio;
   if (!(yield* stdio.stdinIsTerminal)) {
-    return yield* new MissingInput({ flag });
+    return yield* new MissingInput({ flags });
   }
   return yield* prompt;
 });
@@ -54,12 +58,14 @@ const resolveName = Effect.fnUntraced(function* (provided: Option.Option<string>
   const input = Option.isSome(provided)
     ? provided.value
     : yield* ask(
-        "<name>",
+        ["<name>"],
         Prompt.run(
           Prompt.String({
             message: "Package name?",
             validate: (value) =>
-              decodePackageName(value).pipe(Effect.mapError(() => `Invalid name — ${nameHint}`)),
+              decodePackageName(value).pipe(
+                Effect.mapError(() => plain(msg`Invalid name — ${nameHint}`)),
+              ),
           }),
         ),
       );
@@ -82,7 +88,7 @@ const resolveChoice = Effect.fnUntraced(function* (
     return yield* new NothingToChoose({ what });
   }
   return yield* ask(
-    flag,
+    [flag],
     Prompt.run(
       Prompt.Select({
         message,
@@ -101,7 +107,7 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
     return isPublic ? "public" : "private";
   }
   return yield* ask(
-    "--public or --private",
+    ["--public", "--private"],
     Prompt.run(
       Prompt.Select<Visibility>({
         message: "Package type?",
@@ -133,7 +139,7 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
     return undefined;
   }
   const answer = yield* ask(
-    "--npm-scope",
+    ["--npm-scope"],
     Console.log(SCOPE_EXPLAINER).pipe(
       Effect.andThen(
         Prompt.run(
@@ -253,11 +259,14 @@ const makePublic = Command.make(
 ).pipe(Command.withDescription("Make a private package in packages/ publishable to npm"));
 
 const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Finding>) {
+  const { canColor } = yield* TerminalCapabilities.TerminalCapabilities;
   for (const finding of findings.filter((f) => f.fixable)) {
-    yield* Console.error(`${finding.path}: ${finding.problem} (run \`vpr cli pkg sync\`)`);
+    yield* Console.error(
+      render(msg`${finding.path}: ${finding.problem} (run ${code("vpr cli pkg sync")})`, canColor),
+    );
   }
   for (const finding of findings.filter((f) => !f.fixable)) {
-    yield* Console.error(`${finding.path}: ${finding.problem}`);
+    yield* Console.error(render(msg`${finding.path}: ${finding.problem}`, canColor));
   }
 });
 
@@ -320,7 +329,7 @@ const rm = Command.make(
       const plan = yield* workspace.planRemove(name);
       if (!options.yes && !options.dryRun) {
         const confirmed = yield* ask(
-          "--yes",
+          ["--yes"],
           Prompt.run(
             Prompt.Confirm({
               message: `Delete ${plan.packageName} (${plan.packagePath})?`,
