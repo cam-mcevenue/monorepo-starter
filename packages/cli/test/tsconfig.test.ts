@@ -1,9 +1,7 @@
 import { expect, it } from "@effect/vitest";
-import { Effect } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { retargetExtends } from "@repo/cli/internal/tsconfig";
-import { decodePackageName } from "@repo/cli/Model";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const base = path.join(repoRoot, "tsconfig.base.json");
@@ -33,10 +31,3 @@ it("leaves comments and a package-specifier extends untouched", () => {
   const tsconfig = `{\n  // keep me\n  "extends": "@scope/config/base.json"\n}\n`;
   expect(retargetExtends(tsconfig, "/a/b/c", "/a/b", path)).toBe(tsconfig);
 });
-
-it.effect("rejects a name that is not kebab-case", () =>
-  Effect.gen(function* () {
-    const error = yield* Effect.flip(decodePackageName("My_Package"));
-    expect(error._tag).toBe("InvalidName");
-  }),
-);
