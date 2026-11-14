@@ -185,6 +185,17 @@ const privateLeftovers = (member: Member, path: PathOps): ReadonlyArray<Finding>
   return leftovers;
 };
 
+/** Name the package's scope, the setting it should match, and the name to rename it to. */
+const outsideScope = (name: string, scope: string) => {
+  const [own, ...rest] = name.split("/");
+  const isScoped = own?.startsWith("@") === true && rest.length > 0;
+  const setting = `\`"monorepoSettings": { "npmScope": "${scope}" }\` in the root package.json`;
+  const renamed = `\`${scope}/${isScoped ? rest.join("/") : name}\``;
+  return isScoped
+    ? `public package \`${name}\` has scope \`${own}\`, which does not match ${setting}; rename it to ${renamed}`
+    : `public package \`${name}\` has no scope, but ${setting} sets one; rename it to ${renamed}`;
+};
+
 /**
  * What every public package must carry, derived from its manifest and the
  * fragments: the publish fields, and a build config referencing each public
@@ -218,11 +229,7 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
     // The scope is the single source of truth once set; moving a package into it is a rename, by hand.
     const name = member.manifest.name;
     if (scope !== undefined && name !== undefined && !name.startsWith(`${scope}/`)) {
-      findings.push({
-        path: manifest,
-        problem: `public package ${name} is outside the repo's npm scope ${scope}`,
-        fixable: false,
-      });
+      findings.push({ path: manifest, problem: outsideScope(name, scope), fixable: false });
     }
 
     const workspaceDeps = dependencyNames(member.manifest, BUILD_DEPENDENCY_FIELDS).flatMap(

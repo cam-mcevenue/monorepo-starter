@@ -220,16 +220,23 @@ describe("planSync", () => {
     });
   });
 
-  it("flags a public package named outside the scope, as a fix to make by hand", () => {
-    const stray = publicPackage("packages/foo", { name: "@other/foo" });
-    const synced = publicPackage("packages/foo", editedManifest(snapshot(stray), "packages/foo"));
-    expect(planSync(snapshot(synced), path).findings).toEqual([
+  it("flags a public package named outside the scope, naming the rename to make by hand", () => {
+    const findingFor = (name: string) => {
+      const stray = publicPackage("packages/foo", { name });
+      const synced = publicPackage("packages/foo", editedManifest(snapshot(stray), "packages/foo"));
+      return planSync(snapshot(synced), path).findings;
+    };
+    expect(findingFor("@acm/foo")).toEqual([
       {
         path: "packages/foo/package.json",
-        problem: "public package @other/foo is outside the repo's npm scope @acme",
+        problem:
+          'public package `@acm/foo` has scope `@acm`, which does not match `"monorepoSettings": { "npmScope": "@acme" }` in the root package.json; rename it to `@acme/foo`',
         fixable: false,
       },
     ]);
+    expect(findingFor("foo")[0]?.problem).toBe(
+      'public package `foo` has no scope, but `"monorepoSettings": { "npmScope": "@acme" }` in the root package.json sets one; rename it to `@acme/foo`',
+    );
   });
 
   it("asks for monorepoSettings.npmScope only once a public package exists", () => {
