@@ -37,5 +37,3 @@ export const decodeNpmScope = (input: string): Effect.Effect<NpmScope, InvalidSc
 };
 
 export type Visibility = "public" | "private";
-
-export * as Model from "./Model.ts";

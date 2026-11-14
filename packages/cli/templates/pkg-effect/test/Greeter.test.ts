@@ -16,14 +16,14 @@ export type BoundaryGuard = typeof import("@repo/pkg-effect/internal/format");
 layer(Greeter.layer)("Greeter", (it) => {
   it.effect("greets a name read from a fixture", () =>
     Effect.gen(function* () {
-      const greeter = yield* Greeter.Service;
+      const greeter = yield* Greeter.Greeter;
       expect(yield* greeter.greet(sample.name)).toBe("Hello, Ada!");
     }),
   );
 
   it.effect("fails with a typed error when there is nobody to greet", () =>
     Effect.gen(function* () {
-      const greeter = yield* Greeter.Service;
+      const greeter = yield* Greeter.Greeter;
       // flip swaps the channels, so the expected failure is the value under test.
       const error = yield* Effect.flip(greeter.greet("   "));
       expect(error).toMatchObject({ _tag: "EmptyName", input: "   " });

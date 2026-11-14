@@ -9,7 +9,7 @@ import {
   OutOfSync,
 } from "../../PackageError.ts";
 import { type Finding, type Plan, Step } from "../../Plan.ts";
-import { Workspace } from "../../Workspace.ts";
+import * as Workspace from "../../Workspace.ts";
 
 /**
  * `pkg add`, `make-public`, `sync` and `rm`. Each builds a plan through the
@@ -128,7 +128,7 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
   if (Option.isSome(provided)) {
     return yield* decodeNpmScope(provided.value);
   }
-  const workspace = yield* Workspace.Service;
+  const workspace = yield* Workspace.Workspace;
   if ((yield* workspace.npmScope) !== undefined) {
     return undefined;
   }
@@ -151,7 +151,7 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
 
 /** One line per step, with paths relative to the repo root. */
 const printPlan = Effect.fnUntraced(function* (plan: Plan) {
-  const workspace = yield* Workspace.Service;
+  const workspace = yield* Workspace.Workspace;
   const path = yield* Path.Path;
   yield* Console.log("Dry run, nothing written. Would:");
   for (const step of plan.steps) {
@@ -174,7 +174,7 @@ const carryOut = Effect.fnUntraced(function* (
   if (options.dryRun) {
     return yield* printPlan(plan);
   }
-  const workspace = yield* Workspace.Service;
+  const workspace = yield* Workspace.Workspace;
   yield* workspace.apply(plan);
   yield* done;
   if (options.install) {
@@ -206,7 +206,7 @@ const add = Command.make(
   },
   (options) =>
     Effect.gen(function* () {
-      const workspace = yield* Workspace.Service;
+      const workspace = yield* Workspace.Workspace;
       const templateName = yield* resolveChoice(
         options.template,
         "--template",
@@ -237,7 +237,7 @@ const makePublic = Command.make(
   { name: nameArgument, npmScope: npmScopeFlag, dryRun: dryRunFlag, install: installFlag },
   (options) =>
     Effect.gen(function* () {
-      const workspace = yield* Workspace.Service;
+      const workspace = yield* Workspace.Workspace;
       const name = yield* decodePackageName(
         yield* resolveChoice(
           options.name,
@@ -271,7 +271,7 @@ const sync = Command.make(
   },
   ({ check }) =>
     Effect.gen(function* () {
-      const workspace = yield* Workspace.Service;
+      const workspace = yield* Workspace.Workspace;
       const plan = yield* workspace.planSync;
       // Applied, what sync repaired is no longer a finding; what needs a decision still is.
       const findings = check ? plan.findings : plan.findings.filter((f) => !f.fixable);
@@ -305,7 +305,7 @@ const rm = Command.make(
   },
   (options) =>
     Effect.gen(function* () {
-      const workspace = yield* Workspace.Service;
+      const workspace = yield* Workspace.Workspace;
       const name = yield* decodePackageName(
         yield* resolveChoice(
           options.name,

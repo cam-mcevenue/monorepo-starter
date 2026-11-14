@@ -4,8 +4,8 @@ import { Effect, FileSystem, Layer, Path } from "effect";
 import type { JsonObject } from "@repo/cli/internal/manifest";
 import { PackageName, RepoPath } from "@repo/cli/Model";
 import { Step } from "@repo/cli/Plan";
-import { Toolchain } from "@repo/cli/Toolchain";
-import { Workspace } from "@repo/cli/Workspace";
+import * as Toolchain from "@repo/cli/Toolchain";
+import * as Workspace from "@repo/cli/Workspace";
 
 /**
  * The service against a real directory, with the toolchain faked: members are
@@ -38,8 +38,8 @@ const fixture = Effect.fnUntraced(function* (files: Record<string, JsonObject | 
 
 const fakeToolchain = (memberDirs: ReadonlyArray<string>, formatted: Array<string>) =>
   Layer.succeed(
-    Toolchain.Service,
-    Toolchain.Service.of({
+    Toolchain.Toolchain,
+    Toolchain.Toolchain.of({
       listMembers: (root) =>
         Effect.succeed(memberDirs.map((dir) => (dir === "." ? root : `${root}/${dir}`))),
       format: (_root, files) => Effect.sync(() => void formatted.push(...files)),
@@ -50,12 +50,12 @@ const fakeToolchain = (memberDirs: ReadonlyArray<string>, formatted: Array<strin
 /** Build a fixture and run `use` against a workspace rooted there. */
 const inWorkspace = Effect.fnUntraced(function* <A, E, R>(
   files: Record<string, JsonObject | string>,
-  use: (workspace: Workspace.Interface, root: string) => Effect.Effect<A, E, R>,
+  use: (workspace: Workspace.Service, root: string) => Effect.Effect<A, E, R>,
   formatted: Array<string> = [],
 ) {
   const { root, memberDirs } = yield* fixture(files);
   return yield* Effect.gen(function* () {
-    return yield* use(yield* Workspace.Service, root);
+    return yield* use(yield* Workspace.Workspace, root);
   }).pipe(
     Effect.provide(
       Workspace.layerAt(root).pipe(Layer.provide(fakeToolchain(memberDirs, formatted))),

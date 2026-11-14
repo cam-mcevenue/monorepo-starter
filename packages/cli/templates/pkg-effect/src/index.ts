@@ -1,5 +1,6 @@
 /**
- * The package's main entry point. Each top-level module in `src/` is also its
- * own entry point, so `@repo/pkg-effect/Greeter` imports the same namespace.
+ * The package's main entry point, re-exporting each module as a namespace.
+ * Every top-level module in `src/` is also its own entry point, so
+ * `import * as Greeter from "@repo/pkg-effect/Greeter"` reaches the same one.
  */
-export { Greeter } from "./Greeter.ts";
+export * as Greeter from "./Greeter.ts";

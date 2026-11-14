@@ -535,5 +535,3 @@ export const planRemove = Effect.fn("Plan.remove")(function* (
     wasPublic: !isPrivate(target),
   } satisfies RemovePlan;
 });
-
-export * as Plan from "./Plan.ts";

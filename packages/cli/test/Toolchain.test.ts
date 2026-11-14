@@ -1,8 +1,8 @@
 import { NodeServices } from "@effect/platform-node";
 import { expect, layer } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path } from "effect";
-import { Toolchain } from "@repo/cli/Toolchain";
-import { Workspace } from "@repo/cli/Workspace";
+import * as Toolchain from "@repo/cli/Toolchain";
+import * as Workspace from "@repo/cli/Workspace";
 
 /**
  * The one test on the real toolchain: `pnpm ls` resolving the workspace
@@ -38,7 +38,7 @@ layer(NodeServices.layer)("Toolchain", (it) => {
 
       const workspace = Workspace.layerAt(link).pipe(Layer.provide(Toolchain.layer));
       yield* Effect.gen(function* () {
-        const service = yield* Workspace.Service;
+        const service = yield* Workspace.Workspace;
         expect(yield* service.removablePackages).toEqual(["foo"]);
         const written = yield* service.apply(yield* service.planSync);
         expect(written).toEqual(["packages/foo/package.json", "packages/foo/tsconfig.build.json"]);

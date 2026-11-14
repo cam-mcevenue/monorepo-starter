@@ -320,5 +320,3 @@ export const fileSystemFailure =
     effect: Effect.Effect<A, PlatformError.PlatformError, R>,
   ): Effect.Effect<A, FileSystemFailure, R> =>
     Effect.mapError(effect, (cause) => new FileSystemFailure({ operation, path, cause }));
-
-export * as PackageError from "./PackageError.ts";

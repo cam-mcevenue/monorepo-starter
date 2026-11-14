@@ -6,7 +6,7 @@ import { TestConsole } from "effect/testing";
 import { cli } from "@repo/cli";
 import { RepoPath } from "@repo/cli/Model";
 import { type CreatePlan, type Plan, type RemovePlan, Step, type Template } from "@repo/cli/Plan";
-import { Workspace } from "@repo/cli/Workspace";
+import * as Workspace from "@repo/cli/Workspace";
 
 /**
  * The commands over a stub workspace, so these test the CLI's own decisions:
@@ -37,7 +37,7 @@ const stub = (options: { readonly npmScope?: string } = {}) => {
   const scopes: Array<string | undefined> = [];
   let installs = 0;
   const unused = Effect.die("not used by this test");
-  const workspace = Workspace.Service.of({
+  const workspace = Workspace.Workspace.of({
     root: "/repo",
     templates: Effect.succeed(["pkg-effect"]),
     template: () => Effect.succeed(template),
@@ -55,13 +55,13 @@ const stub = (options: { readonly npmScope?: string } = {}) => {
   return { applied, scopes, installs: () => installs, workspace };
 };
 
-const run = (workspace: Workspace.Interface, args: ReadonlyArray<string>) =>
+const run = (workspace: Workspace.Service, args: ReadonlyArray<string>) =>
   Command.runWith(cli, { version: "0.0.0", renderErrors: false })(args).pipe(
     Effect.provide(
       Layer.mergeAll(
         NodeServices.layer,
         Stdio.layerTest({}),
-        Layer.succeed(Workspace.Service, workspace),
+        Layer.succeed(Workspace.Workspace, workspace),
       ),
     ),
   );
