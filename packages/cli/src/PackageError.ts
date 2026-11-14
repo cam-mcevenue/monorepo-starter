@@ -87,6 +87,19 @@ export class ConflictingFlags extends Schema.TaggedError<
   }
 }
 
+/** A prompt was needed but stdin is not a terminal, so the input must come as an argument. */
+export class MissingInput extends Schema.TaggedError<
+  MissingInput,
+  { readonly brand: unique symbol }
+>()("MissingInput", { flag: Schema.String }) {
+  override get message() {
+    return `stdin is not a terminal, so pass ${this.flag} instead of answering a prompt`;
+  }
+  override get [CliError.userMessage]() {
+    return this.message;
+  }
+}
+
 export class PackageNotFound extends Schema.TaggedError<
   PackageNotFound,
   { readonly brand: unique symbol }

@@ -4,15 +4,10 @@ import { Effect } from "effect";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-  applyPlan,
-  createPackage,
-  loadWorkspace,
-  makePublic,
-  planRemoval,
-  syncWorkspace,
-} from "@repo/cli/internal/workspace";
+import { Layer } from "effect";
 import { PackageName } from "@repo/cli/Model";
+import { Toolchain } from "@repo/cli/Toolchain";
+import { Workspace } from "@repo/cli/Workspace";
 
 const name = (value: string) => PackageName.make(value);
 
@@ -51,8 +46,56 @@ const fixture = (files: Record<string, unknown>) => {
   };
 };
 
-const run = <A, E>(effect: Effect.Effect<A, E, NodeServices.NodeServices>) =>
-  effect.pipe(Effect.provide(NodeServices.layer));
+/** Use the workspace service from inside a test effect. */
+const withWorkspace = Effect.fnUntraced(function* <A, E>(
+  use: (workspace: Workspace.Interface) => Effect.Effect<A, E>,
+) {
+  return yield* use(yield* Workspace.Service);
+});
+
+/** Run against the workspace at `root`, over the real toolchain. */
+const run = <A, E>(root: string, effect: Effect.Effect<A, E, Workspace.Service>) =>
+  effect.pipe(
+    Effect.provide(
+      Workspace.layerAt(root).pipe(
+        Layer.provide(Toolchain.layer),
+        Layer.provide(NodeServices.layer),
+      ),
+    ),
+  );
+
+const sync = Effect.fnUntraced(function* (check: boolean) {
+  const workspace = yield* Workspace.Service;
+  const plan = yield* workspace.planSync;
+  return check
+    ? { findings: plan.findings, written: [] }
+    : { findings: plan.findings, written: yield* workspace.apply(plan) };
+});
+
+const makePublic = Effect.fnUntraced(function* (value: string) {
+  const workspace = yield* Workspace.Service;
+  const plan = yield* workspace.planMakePublic(name(value));
+  yield* workspace.apply(plan);
+  return plan;
+});
+
+const create = Effect.fnUntraced(function* (
+  value: string,
+  template: string,
+  visibility: "public" | "private",
+) {
+  const workspace = yield* Workspace.Service;
+  const plan = yield* workspace.planCreate(
+    yield* workspace.template(template),
+    name(value),
+    visibility,
+  );
+  yield* workspace.apply(plan);
+  return plan;
+});
+
+const planRemove = (value: string) =>
+  withWorkspace((workspace) => workspace.planRemove(name(value)));
 
 describe("syncWorkspace", () => {
   it.effect("check writes nothing; sync repairs; a second sync finds nothing", () =>
@@ -72,12 +115,12 @@ describe("syncWorkspace", () => {
 `,
       });
 
-      const checked = yield* run(syncWorkspace(repo.root, { check: true }));
+      const checked = yield* run(repo.root, sync(true));
       expect(checked.findings.filter((f) => f.fixable).length).toBeGreaterThan(0);
       expect(checked.written).toEqual([]);
       expect(repo.exists("packages/foo/tsconfig.build.json")).toBe(false);
 
-      const synced = yield* run(syncWorkspace(repo.root, { check: false }));
+      const synced = yield* run(repo.root, sync(false));
       expect(synced.written).toContain("packages/foo/tsconfig.build.json");
       expect(repo.read("packages/foo/tsconfig.build.json")).toContain(
         '{ "path": "../bar/tsconfig.build.json" }',
@@ -87,7 +130,7 @@ describe("syncWorkspace", () => {
         "./dist/index.js",
       );
 
-      const again = yield* run(syncWorkspace(repo.root, { check: true }));
+      const again = yield* run(repo.root, sync(true));
       expect(again.findings).toEqual([]);
     }),
   );
@@ -102,8 +145,11 @@ describe("loadWorkspace through a symlinked root", () => {
       fs.symlinkSync(repo.root, link);
       fixtureRoots.push(link);
 
-      const snapshot = yield* run(loadWorkspace(link));
-      expect(snapshot.members.map((m) => m.dir).sort()).toEqual(["", "packages/foo"]);
+      const removable = yield* run(
+        link,
+        withWorkspace((workspace) => workspace.removablePackages),
+      );
+      expect(removable).toEqual(["foo"]);
     }),
   );
 });
@@ -123,7 +169,7 @@ describe("makePublic", () => {
         "packages/app/src/main.ts": 'import "@repo/foo/Thing";\nimport "@repo/foo-extra";\n',
       });
 
-      const result = yield* run(makePublic(repo.root, name("foo")));
+      const result = yield* run(repo.root, makePublic("foo"));
 
       expect(result).toMatchObject({ from: "@repo/foo", to: "@acme/foo" });
       const manifest = repo.json("packages/foo/package.json");
@@ -148,7 +194,7 @@ describe("makePublic", () => {
         "package.json": { name: "monorepo", private: true },
         "packages/foo/package.json": { name: "@repo/foo", private: true },
       });
-      const noScope = yield* run(Effect.flip(makePublic(unscoped.root, name("foo"))));
+      const noScope = yield* run(unscoped.root, Effect.flip(makePublic("foo")));
       expect(noScope.message).toContain('"repo": { "npmScope"');
 
       const withPrivateDeps = fixture({
@@ -161,7 +207,7 @@ describe("makePublic", () => {
         "packages/a/package.json": { name: "@repo/a", private: true },
         "packages/b/package.json": { name: "@repo/b", private: true },
       });
-      const blocked = yield* run(Effect.flip(makePublic(withPrivateDeps.root, name("foo"))));
+      const blocked = yield* run(withPrivateDeps.root, Effect.flip(makePublic("foo")));
       expect(blocked.message).toContain("@repo/a, @repo/b");
       expect(withPrivateDeps.json("packages/foo/package.json").private).toBe(true);
     }),
@@ -184,7 +230,7 @@ describe("removePackage", () => {
         },
       });
 
-      const checked = yield* Effect.flip(run(planRemoval(repo.root, name("foo"))));
+      const checked = yield* Effect.flip(run(repo.root, planRemove("foo")));
       expect(checked.message).toContain("packages/app/package.json (devDependencies)");
 
       const refused = checked;
@@ -192,8 +238,14 @@ describe("removePackage", () => {
       expect(refused.message).toContain("packages/lib/package.json (peerDependencies)");
       expect(repo.exists("packages/foo/package.json")).toBe(true);
 
-      const removed = yield* run(planRemoval(repo.root, name("app")));
-      yield* run(applyPlan(repo.root, removed));
+      const removed = yield* run(
+        repo.root,
+        Effect.gen(function* () {
+          const plan = yield* planRemove("app");
+          yield* withWorkspace((workspace) => workspace.apply(plan));
+          return plan;
+        }),
+      );
       expect(removed.packageName).toBe("@repo/app");
       expect(repo.exists("packages/app")).toBe(false);
     }),
@@ -204,7 +256,7 @@ describe("createPackage", () => {
   it.effect("public: scaffolds from the template, then makes it public in the scope", () =>
     Effect.gen(function* () {
       const repo = fixture({});
-      const created = yield* run(createPackage(repo.root, name("widget"), "pkg-effect", "public"));
+      const created = yield* run(repo.root, create("widget", "pkg-effect", "public"));
 
       expect(created.packageName).toBe("@acme/widget");
       const manifest = repo.json("packages/widget/package.json");
@@ -219,9 +271,7 @@ describe("createPackage", () => {
   it.effect("public without a scope fails before copying, leaving nothing behind", () =>
     Effect.gen(function* () {
       const repo = fixture({ "package.json": { name: "monorepo", private: true } });
-      const error = yield* run(
-        Effect.flip(createPackage(repo.root, name("widget"), "pkg-effect", "public")),
-      );
+      const error = yield* run(repo.root, Effect.flip(create("widget", "pkg-effect", "public")));
 
       expect(error.message).toContain('"repo": { "npmScope"');
       expect(repo.exists("packages/widget")).toBe(false);

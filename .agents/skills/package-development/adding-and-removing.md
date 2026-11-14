@@ -5,22 +5,29 @@ The dev CLI owns both directions:
 ```sh
 vpr cli pkg add                            # prompts for template, name, then type
 vpr cli pkg add my-package --template pkg-effect --private
-vp install                                 # link it into the workspace
+vpr cli pkg add my-package --template pkg-effect --private --dry-run   # print the plan only
 
 vpr cli pkg rm                             # prompts for which package
 vpr cli pkg rm my-package --yes            # skip the confirmation
-vp install
 ```
 
+Each command runs `vp install` afterwards to relink the workspace; `--no-install` skips it.
+`--dry-run` prints the copies, removals and writes it would make, and changes nothing.
+
+Without a terminal on stdin, as under an agent or the task runner, a command never prompts. It
+fails instead, naming the argument or flag to pass: `<name>`, `--template`, `--public` or
+`--private`, and `--yes` for `pkg rm`.
+
 `--public` makes the new package publishable; [`registration.md`](./registration.md) covers
-what that adds. It checks for the npm scope before copying anything, so a failed
-`pkg add --public` leaves no directory behind.
+what that adds. Every check runs before anything is written, and a copy is removed again if a
+later step fails, so a failed `pkg add` leaves no directory behind.
 
 `pkg add` does four things a hand-built package misses:
 
 1. Copies the chosen template from `packages/cli/templates/`.
-2. Rewrites the package name to `@repo/<name>`, and repoints every reference to the template's
-   own package name across the copied `.ts` and `.json` files.
+2. Rewrites the package name to `@repo/<name>`, or `<npm scope>/<name>` with `--public`, and
+   repoints every reference to the template's own package name across the copied `.ts` and
+   `.json` files.
 3. Prunes `node_modules` and `dist`, which `cp -r` would otherwise carry over from the
    template's own install.
 4. Repoints the copy's `tsconfig.json` `extends` from the template's depth to

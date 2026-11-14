@@ -29,7 +29,7 @@ The boundary is enforced by the `exports` map, not by convention:
 `./*` because a longer literal prefix beats a wildcard, so the block holds regardless of
 ordering.
 
-Tests reach internals through the package name, `@repo/cli/internal/scaffold`, which needs a
+Tests reach internals through the package name, `@repo/cli/internal/tsconfig`, which needs a
 typecheck alias and a runtime alias side by side. [`typescript.md`](./typescript.md) covers
 the pair.
 

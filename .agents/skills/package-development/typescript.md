@@ -24,7 +24,7 @@ naming the file it could not read, and `vpr test` fails the transform with `TSCO
 
 Templates sit four levels deep and their copies land two deep, so a template's `extends` is
 written for where the template sits (`../../../../`), and `pkg add` repoints the copy with
-`retargetExtends` in `packages/cli/src/internal/scaffold.ts`. The scaffold test asserts both
+`retargetExtends` in `packages/cli/src/internal/tsconfig.ts`. The scaffold test asserts both
 resolve to the root base.
 
 `types: []` in the base means no `@types/*` package is ambient. A project opts in with
@@ -39,13 +39,13 @@ warnings on every test. An override that sets an array repeats the base's items 
 
 ## Tests reaching internals
 
-The `exports` map blocks `./internal/*`, so a test importing `@repo/cli/internal/scaffold` needs
+The `exports` map blocks `./internal/*`, so a test importing `@repo/cli/internal/tsconfig` needs
 two aliases, one per resolver:
 
 - **Typecheck**: `paths` in the package's own `tsconfig.json`, `"@repo/cli/*": ["./src/*.ts"]`.
 - **Runtime**: `resolve.alias` in the root `vite.config.ts`. Vitest resolves through the
   `exports` map and ignores `paths`, so without this the test fails with
-  `"./internal/scaffold" is not exported`.
+  `"./internal/tsconfig" is not exported`.
 
 Add both halves together. Either alone passes one gate and fails the other.
 

@@ -38,8 +38,8 @@ Use `git mv` so history follows the files.
 
 ```sh
 vpr cli pkg add my-lib --public     # new package, public from the start
-vpr cli pkg make-public my-lib      # an existing private package
-vp install                          # relink the renamed package
+vpr cli pkg make-public my-lib      # an existing private package, then vp install
+vpr cli pkg make-public my-lib --dry-run   # list every file the rename would touch
 ```
 
 Both need `"repo": { "npmScope": "@your-scope" }` in the root `package.json`, because nobody

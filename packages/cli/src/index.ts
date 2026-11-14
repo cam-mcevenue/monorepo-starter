@@ -1,5 +1,5 @@
 import { Command } from "effect/cli";
-import { pkg } from "./commands/pkg.ts";
+import { pkg } from "./internal/commands/pkg.ts";
 
 /**
  * This repo's dev CLI. Add commands here as the repo grows — it is tooling for
