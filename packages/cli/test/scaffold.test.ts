@@ -2,7 +2,7 @@ import { expect, it } from "@effect/vitest";
 import { Effect } from "effect";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { retargetExtends } from "@repo/cli/internal/scaffold";
+import { retargetExtends } from "@repo/cli/internal/tsconfig";
 import { decodePackageName } from "@repo/cli/Model";
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..");

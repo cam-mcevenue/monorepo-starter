@@ -1,21 +1,18 @@
 import { Console, Effect, Option } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/cli";
 import {
-  checkRemovable,
+  applyPlan,
   createPackage,
   findRepoRoot,
+  listPrivatePackages,
   listRemovablePackages,
   listTemplates,
-  removePackage,
-} from "../internal/scaffold.ts";
-import {
-  type Finding,
-  formatFiles,
-  listPrivatePackages,
   makePublic,
+  planRemoval,
   syncWorkspace,
 } from "../internal/workspace.ts";
 import { decodePackageName, type Visibility } from "../Model.ts";
+import type { Finding } from "../Plan.ts";
 import {
   ConflictingFlags,
   nameHint,
@@ -114,13 +111,12 @@ const add = Command.make(
       const visibility = yield* resolveVisibility(options.public, options.private);
 
       const root = yield* repoRoot;
-      const { packageName, packagePath, written } = yield* createPackage(
+      const { packageName, packagePath } = yield* createPackage(
         root,
         chosenName,
         chosenTemplate,
         visibility,
       );
-      yield* formatFiles(root, written);
       yield* Console.log(
         `Created ${visibility} ${packageName} at ${packagePath} from the ${chosenTemplate} template`,
       );
@@ -141,8 +137,7 @@ const makePublicCommand = Command.make("make-public", { name: nameArgument }, ({
           ),
     );
 
-    const { from, to, written } = yield* makePublic(root, chosenName);
-    yield* formatFiles(root, written);
+    const { from, to } = yield* makePublic(root, chosenName);
     yield* Console.log(`${from} is now public as ${to}`);
     yield* Console.log("Next: run `vp install` to relink the renamed package");
   }),
@@ -169,7 +164,6 @@ const sync = Command.make(
     Effect.gen(function* () {
       const root = yield* repoRoot;
       const { findings, written } = yield* syncWorkspace(root, { check });
-      yield* formatFiles(root, written);
       for (const file of written) {
         yield* Console.log(`Wrote ${file}`);
       }
@@ -208,11 +202,12 @@ const rm = Command.make(
       );
 
       // Refuse before asking, so a "yes" is never followed by a refusal.
-      const { packageName: target, packagePath } = yield* checkRemovable(root, chosenName);
+      const plan = yield* planRemoval(root, chosenName);
+      const { packageName, packagePath, wasPublic } = plan;
       if (!yes) {
         const confirmed = yield* Prompt.run(
           Prompt.Confirm({
-            message: `Delete ${target} (${packagePath})?`,
+            message: `Delete ${packageName} (${packagePath})?`,
             initial: false,
           }),
         );
@@ -221,8 +216,7 @@ const rm = Command.make(
         }
       }
 
-      const { packageName, written, wasPublic } = yield* removePackage(root, chosenName);
-      yield* formatFiles(root, written);
+      yield* applyPlan(root, plan);
       yield* Console.log(`Removed ${packageName} (${packagePath})`);
       if (wasPublic) {
         yield* Console.log("Any release already on npm is untouched; deprecate it there if needed");

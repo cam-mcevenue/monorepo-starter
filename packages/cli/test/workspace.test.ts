@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as path from "node:path";
 import { Schema } from "effect";
 import { type JsonObject, Manifest } from "@repo/cli/internal/manifest";
-import { type Member, planSync, type Snapshot } from "@repo/cli/internal/workspace";
+import { type Member, planSync, type Snapshot } from "@repo/cli/Plan";
 import { RepoPath } from "@repo/cli/Model";
 
 /** A member whose decoded view matches its JSON, as loading would build it. */
@@ -50,8 +50,11 @@ const publicPackage = (dir: string, json: JsonObject = {}): Member =>
     buildConfigFragment,
   );
 
+const writes = (snap: Snapshot) =>
+  planSync(snap, path).steps.flatMap((step) => (step._tag === "Write" ? [step] : []));
+
 const editedManifest = (snap: Snapshot, dir: string) => {
-  const edit = planSync(snap, path).edits.find((e) => e.path === `${dir}/package.json`);
+  const edit = writes(snap).find((e) => e.path === `${dir}/package.json`);
   return edit === undefined ? undefined : JSON.parse(edit.contents);
 };
 
@@ -102,7 +105,7 @@ describe("planSync", () => {
     ]);
 
     const synced = snapshot(publicPackage("packages/foo", editedManifest(stale, "packages/foo")));
-    expect(planSync(synced, path)).toEqual({ edits: [], findings: [] });
+    expect(planSync(synced, path)).toEqual({ steps: [], findings: [] });
   });
 
   it("ignores key order, since the formatter sorts package.json", () => {
@@ -117,7 +120,7 @@ describe("planSync", () => {
           )
         : value;
     const shuffled = snapshot(publicPackage("packages/foo", reversed(synced) as JsonObject));
-    expect(planSync(shuffled, path)).toEqual({ edits: [], findings: [] });
+    expect(planSync(shuffled, path)).toEqual({ steps: [], findings: [] });
   });
 
   it("references the build config of each workspace dep and peer dep, sorted, never dev deps", () => {
@@ -131,9 +134,7 @@ describe("planSync", () => {
       publicPackage("apps/bar"),
       publicPackage("packages/dev-only"),
     );
-    const edit = planSync(snap, path).edits.find(
-      (e) => e.path === "packages/foo/tsconfig.build.json",
-    );
+    const edit = writes(snap).find((e) => e.path === "packages/foo/tsconfig.build.json");
     expect(edit?.contents).toBe(`{
   "extends": "./tsconfig.json",
   "include": ["src"],
@@ -149,7 +150,8 @@ describe("planSync", () => {
   it("creates a missing build config from the fragment, even with nothing to reference", () => {
     const snap = snapshot({ ...publicPackage("packages/foo"), buildConfig: undefined });
     const plan = planSync(snap, path);
-    expect(plan.edits).toContainEqual({
+    expect(writes(snap)).toContainEqual({
+      _tag: "Write",
       path: "packages/foo/tsconfig.build.json",
       contents: buildConfigFragment,
     });
@@ -179,7 +181,7 @@ describe("planSync", () => {
       problem: "depends on private workspace package @repo/secret",
       fixable: false,
     });
-    expect(plan.edits.map((e) => e.path)).not.toContain("packages/foo/tsconfig.build.json");
+    expect(writes(snap).map((e) => e.path)).not.toContain("packages/foo/tsconfig.build.json");
   });
 
   it("flags build leftovers on a private package without touching it", () => {
@@ -187,7 +189,7 @@ describe("planSync", () => {
       privatePackage("packages/old", { publishConfig: { access: "public" } }, buildConfigFragment),
     );
     expect(planSync(snap, path)).toEqual({
-      edits: [],
+      steps: [],
       findings: [
         {
           path: "packages/old/tsconfig.build.json",

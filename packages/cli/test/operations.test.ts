@@ -4,8 +4,14 @@ import { Effect } from "effect";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { checkRemovable, createPackage, removePackage } from "@repo/cli/internal/scaffold";
-import { loadWorkspace, makePublic, syncWorkspace } from "@repo/cli/internal/workspace";
+import {
+  applyPlan,
+  createPackage,
+  loadWorkspace,
+  makePublic,
+  planRemoval,
+  syncWorkspace,
+} from "@repo/cli/internal/workspace";
 import { PackageName } from "@repo/cli/Model";
 
 const name = (value: string) => PackageName.make(value);
@@ -178,15 +184,16 @@ describe("removePackage", () => {
         },
       });
 
-      const checked = yield* Effect.flip(run(checkRemovable(repo.root, name("foo"))));
+      const checked = yield* Effect.flip(run(planRemoval(repo.root, name("foo"))));
       expect(checked.message).toContain("packages/app/package.json (devDependencies)");
 
-      const refused = yield* Effect.flip(run(removePackage(repo.root, name("foo"))));
+      const refused = checked;
       expect(refused.message).toContain("packages/app/package.json (devDependencies)");
       expect(refused.message).toContain("packages/lib/package.json (peerDependencies)");
       expect(repo.exists("packages/foo/package.json")).toBe(true);
 
-      const removed = yield* run(removePackage(repo.root, name("app")));
+      const removed = yield* run(planRemoval(repo.root, name("app")));
+      yield* run(applyPlan(repo.root, removed));
       expect(removed.packageName).toBe("@repo/app");
       expect(repo.exists("packages/app")).toBe(false);
     }),
