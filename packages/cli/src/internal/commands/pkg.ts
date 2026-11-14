@@ -1,6 +1,6 @@
-import { Console, Effect, Option, Path, Stdio } from "effect";
-import { Argument, Command, Flag, Prompt, TerminalCapabilities } from "effect/cli";
-import { code, msg, plain, render } from "../message.ts";
+import { Effect, Option, Path, Stdio } from "effect";
+import { Argument, Command, Flag, Prompt } from "effect/cli";
+import { code, log, logError, msg, plain, styled, tag } from "../message.ts";
 import { decodeNpmScope, decodePackageName, type Visibility } from "../../Model.ts";
 import {
   ConflictingFlags,
@@ -120,10 +120,10 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
   );
 });
 
-const SCOPE_EXPLAINER = `Public packages publish to npm under a scope, such as @your-org.
+const SCOPE_EXPLAINER = msg`Public packages publish to npm under a scope, such as ${code("@your-org")}.
 This repo has none set yet, so pkg will add
-  "monorepoSettings": { "npmScope": "<your answer>" }
-to the root package.json, and name every public package <scope>/<name>.`;
+  ${code('"monorepoSettings": { "npmScope": "<your answer>" }')}
+to the root ${code("package.json")}, and name every public package ${code("<scope>/<name>")}.`;
 
 /**
  * The scope to record for a repo that has none: `--npm-scope`, or a prompt
@@ -140,7 +140,7 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
   }
   const answer = yield* ask(
     ["--npm-scope"],
-    Console.log(SCOPE_EXPLAINER).pipe(
+    log(SCOPE_EXPLAINER).pipe(
       Effect.andThen(
         Prompt.run(
           Prompt.String({
@@ -159,13 +159,14 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
 const printPlan = Effect.fnUntraced(function* (plan: Plan) {
   const workspace = yield* Workspace.Workspace;
   const path = yield* Path.Path;
-  yield* Console.log("Dry run, nothing written. Would:");
+  yield* log(msg`${tag("Dry run", "caution")} nothing written. Would:`);
   for (const step of plan.steps) {
-    yield* Console.log(
+    yield* log(
       Step.$match(step, {
-        Copy: ({ from, to }) => `  copy   ${path.relative(workspace.root, from)} → ${to}`,
-        Remove: ({ path: target }) => `  remove ${target}`,
-        Write: ({ path: target }) => `  write  ${target}`,
+        Copy: ({ from, to }) =>
+          msg`  copy   ${code(path.relative(workspace.root, from))} -> ${code(to)}`,
+        Remove: ({ path: target }) => msg`  ${styled("remove", "danger")} ${code(target)}`,
+        Write: ({ path: target }) => msg`  write  ${code(target)}`,
       }),
     );
   }
@@ -186,7 +187,7 @@ const carryOut = Effect.fnUntraced(function* (
   if (options.install) {
     yield* workspace.install;
   } else {
-    yield* Console.log("Next: run `vp install` to relink the workspace");
+    yield* log(msg`${tag("Next", "info")} run ${code("vp install")} to relink the workspace`);
   }
 });
 
@@ -213,6 +214,7 @@ const add = Command.make(
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Workspace;
+      const path = yield* Path.Path;
       const templateName = yield* resolveChoice(
         options.template,
         "--template",
@@ -231,8 +233,8 @@ const add = Command.make(
       yield* carryOut(
         plan,
         options,
-        Console.log(
-          `Created ${visibility} ${plan.packageName} at ${plan.packagePath} from the ${template.name} template`,
+        log(
+          msg`${tag("Created", "success")} ${visibility} package ${code(plan.packageName)} at ${code(plan.packagePath)} from the template -> ${code(path.relative(workspace.root, template.dir))}`,
         ),
       );
     }),
@@ -254,19 +256,22 @@ const makePublic = Command.make(
         ),
       );
       const plan = yield* workspace.planMakePublic(name, yield* resolveScope(options.npmScope));
-      yield* carryOut(plan, options, Console.log(`${plan.from} is now public as ${plan.to}`));
+      yield* carryOut(
+        plan,
+        options,
+        log(msg`${tag("Made public", "success")} ${code(plan.from)} is now ${code(plan.to)}`),
+      );
     }),
 ).pipe(Command.withDescription("Make a private package in packages/ publishable to npm"));
 
+/** `[file]: problem`, the ones sync can repair first, each pointing at the command that does. */
 const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Finding>) {
-  const { canColor } = yield* TerminalCapabilities.TerminalCapabilities;
+  const line = (finding: Finding) => msg`[${styled(finding.path, "label")}]: ${finding.problem}`;
   for (const finding of findings.filter((f) => f.fixable)) {
-    yield* Console.error(
-      render(msg`${finding.path}: ${finding.problem} (run ${code("vpr cli pkg sync")})`, canColor),
-    );
+    yield* logError(msg`${line(finding)} (run ${code("vpr cli pkg sync")})`);
   }
   for (const finding of findings.filter((f) => !f.fixable)) {
-    yield* Console.error(render(msg`${finding.path}: ${finding.problem}`, canColor));
+    yield* logError(line(finding));
   }
 });
 
@@ -286,7 +291,7 @@ const sync = Command.make(
       const findings = check ? plan.findings : plan.findings.filter((f) => !f.fixable);
       if (!check) {
         for (const file of yield* workspace.apply(plan)) {
-          yield* Console.log(`Wrote ${file}`);
+          yield* log(msg`${tag("Wrote", "success")} ${code(file)}`);
         }
       }
       yield* printFindings(findings);
@@ -338,7 +343,7 @@ const rm = Command.make(
           ),
         );
         if (!confirmed) {
-          return yield* Console.log("Aborted");
+          return yield* log(msg`${tag("Aborted", "caution")} nothing deleted`);
         }
       }
 
@@ -346,10 +351,12 @@ const rm = Command.make(
         plan,
         options,
         Effect.gen(function* () {
-          yield* Console.log(`Removed ${plan.packageName} (${plan.packagePath})`);
+          yield* log(
+            msg`${tag("Removed", "success")} ${code(plan.packageName)} at ${code(plan.packagePath)}`,
+          );
           if (plan.wasPublic) {
-            yield* Console.log(
-              "Any release already on npm is untouched; deprecate it there if needed",
+            yield* log(
+              msg`${tag("Note", "caution")} any release already on npm is untouched; deprecate it there if needed`,
             );
           }
         }),

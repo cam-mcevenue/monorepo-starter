@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { CliError } from "effect/cli";
-import { code, join, msg, plain, render } from "@repo/cli/internal/message";
+import { code, join, msg, plain, render, styled, tag } from "@repo/cli/internal/message";
 import { formatter } from "@repo/cli/internal/output";
 import { InvalidName } from "@repo/cli/PackageError";
 
@@ -10,13 +10,13 @@ describe("message", () => {
     const message = msg`pass ${code("--yes")}, ${3} of ${names}`;
     expect(message.parts).toEqual([
       "pass ",
-      { code: "--yes" },
+      { text: "--yes", style: "code" },
       ", ",
       "3",
       " of ",
-      { code: "a" },
+      { text: "a", style: "code" },
       ", ",
-      { code: "b" },
+      { text: "b", style: "code" },
     ]);
     expect(plain(message)).toBe("pass --yes, 3 of a, b");
   });
@@ -25,6 +25,16 @@ describe("message", () => {
     const message = msg`${code("@acme/foo")} already exists`;
     expect(render(message, false)).toBe("@acme/foo already exists");
     expect(render(message, true)).toBe("\x1b[36m@acme/foo\x1b[39m already exists");
+  });
+
+  it("styles a status tag's word, not its brackets, and a finding's file in yellow", () => {
+    expect(render(msg`${tag("Created", "success")} x`, true)).toBe(
+      "[\x1b[1m\x1b[32mCreated\x1b[39m\x1b[22m] x",
+    );
+    expect(render(msg`[${styled("a/package.json", "label")}]: y`, true)).toBe(
+      "[\x1b[33ma/package.json\x1b[39m]: y",
+    );
+    expect(render(msg`${tag("Created", "success")} x`, false)).toBe("[Created] x");
   });
 
   it("escapes control characters from input, so a name cannot drive the terminal", () => {

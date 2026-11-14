@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Stdio } from "effect";
-import { Command } from "effect/cli";
+import { Command, TerminalCapabilities } from "effect/cli";
 import { TestConsole } from "effect/testing";
 import { cli } from "@repo/cli";
 import { RepoPath } from "@repo/cli/Model";
@@ -61,6 +61,12 @@ const run = (workspace: Workspace.Service, args: ReadonlyArray<string>) =>
       Layer.mergeAll(
         NodeServices.layer,
         Stdio.layerTest({}),
+        // Plain output, whatever the test runner does to colour.
+        Layer.succeed(TerminalCapabilities.TerminalCapabilities, {
+          canColor: false,
+          canAnimate: false,
+          canPrompt: false,
+        }),
         Layer.succeed(Workspace.Workspace, workspace),
       ),
     ),
@@ -81,7 +87,7 @@ describe("pkg rm", () => {
       const { applied, installs, workspace } = stub();
       yield* run(workspace, ["pkg", "rm", "foo", "--dry-run"]);
       expect(yield* TestConsole.logLines).toEqual([
-        "Dry run, nothing written. Would:",
+        "[Dry run] nothing written. Would:",
         "  remove packages/foo",
       ]);
       expect(applied).toEqual([]);
@@ -105,7 +111,7 @@ describe("pkg rm", () => {
       expect(applied).toEqual([removePlan]);
       expect(installs()).toBe(0);
       expect(yield* TestConsole.logLines).toContain(
-        "Next: run `vp install` to relink the workspace",
+        "[Next] run vp install to relink the workspace",
       );
     }),
   );
