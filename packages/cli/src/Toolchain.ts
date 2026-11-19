@@ -1,6 +1,5 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import type { RepoPath } from "./Model.ts";
 import { ProcessFailure, UnexpectedOutput } from "./PackageError.ts";
 
 /**
@@ -17,7 +16,7 @@ export interface Service {
   /** Run the repo formatter over files the CLI wrote as plain `JSON.stringify` output. */
   readonly format: (
     root: string,
-    files: ReadonlyArray<RepoPath>,
+    files: ReadonlyArray<string>,
   ) => Effect.Effect<void, ProcessFailure>;
   /** Relink the workspace, with the install's output shown as it runs. */
   readonly install: (root: string) => Effect.Effect<void, ProcessFailure>;
@@ -55,7 +54,7 @@ export const make = Effect.gen(function* () {
 
   const format = Effect.fn("Toolchain.format")(function* (
     root: string,
-    files: ReadonlyArray<RepoPath>,
+    files: ReadonlyArray<string>,
   ) {
     if (files.length > 0) {
       yield* run(ChildProcess.make("vp", ["fmt", ...files], { cwd: root }), "vp fmt");

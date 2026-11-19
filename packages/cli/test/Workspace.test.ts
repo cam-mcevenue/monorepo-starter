@@ -2,7 +2,7 @@ import { NodeServices } from "@effect/platform-node";
 import { describe, expect, layer } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import type { JsonObject } from "@repo/cli/internal/manifest";
-import { PackageName, RepoPath } from "@repo/cli/Model";
+import { PackageName } from "@repo/cli/Model";
 import { Step } from "@repo/cli/Plan";
 import * as Toolchain from "@repo/cli/Toolchain";
 import * as Workspace from "@repo/cli/Workspace";
@@ -91,7 +91,7 @@ layer(NodeServices.layer)("Workspace", (it) => {
           (workspace, root) =>
             Effect.gen(function* () {
               const written = yield* workspace.apply(yield* workspace.planSync);
-              expect(written).toContain("packages/foo/tsconfig.build.json");
+              expect(written).toContain(`${workspace.root}/packages/foo/tsconfig.build.json`);
               expect(formatted).toEqual(written);
               expect(yield* read(root, "packages/foo/tsconfig.build.json")).toContain(
                 '{ "path": "../bar/tsconfig.build.json" }',
@@ -168,9 +168,9 @@ layer(NodeServices.layer)("Workspace", (it) => {
               const failure = yield* Effect.flip(
                 workspace.apply({
                   steps: [
-                    Step.Copy({ from: `${root}/seed`, to: RepoPath.make("packages/copy") }),
+                    Step.Copy({ from: `${root}/seed`, to: `${root}/packages/copy` }),
                     // A file where a directory is needed, so the write cannot succeed.
-                    Step.Write({ path: RepoPath.make("seed/package.json/x"), contents: "" }),
+                    Step.Write({ path: `${root}/seed/package.json/x`, contents: "" }),
                   ],
                   findings: [],
                 }),

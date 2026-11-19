@@ -155,18 +155,26 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
   return yield* decodeNpmScope(answer);
 });
 
-/** One line per step, with paths relative to the repo root. */
-const printPlan = Effect.fnUntraced(function* (plan: Plan) {
+/**
+ * Plans carry absolute paths; people read them relative to the repo root. This
+ * is the edge where one becomes the other.
+ */
+const shownFromRoot = Effect.gen(function* () {
   const workspace = yield* Workspace.Workspace;
   const path = yield* Path.Path;
+  return (target: string) => path.relative(workspace.root, target);
+});
+
+/** One line per step. */
+const printPlan = Effect.fnUntraced(function* (plan: Plan) {
+  const shown = yield* shownFromRoot;
   yield* log(msg`${tag("Dry run", "caution")} nothing written. Would:`);
   for (const step of plan.steps) {
     yield* log(
       Step.$match(step, {
-        Copy: ({ from, to }) =>
-          msg`  copy   ${code(path.relative(workspace.root, from))} -> ${code(to)}`,
-        Remove: ({ path: target }) => msg`  ${styled("remove", "danger")} ${code(target)}`,
-        Write: ({ path: target }) => msg`  write  ${code(target)}`,
+        Copy: ({ from, to }) => msg`  copy   ${code(shown(from))} -> ${code(shown(to))}`,
+        Remove: ({ path: target }) => msg`  ${styled("remove", "danger")} ${code(shown(target))}`,
+        Write: ({ path: target }) => msg`  write  ${code(shown(target))}`,
       }),
     );
   }
@@ -214,7 +222,7 @@ const add = Command.make(
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Workspace;
-      const path = yield* Path.Path;
+      const shown = yield* shownFromRoot;
       const templateName = yield* resolveChoice(
         options.template,
         "--template",
@@ -234,7 +242,7 @@ const add = Command.make(
         plan,
         options,
         log(
-          msg`${tag("Created", "success")} ${visibility} package ${code(plan.packageName)} at ${code(plan.packagePath)} from the template -> ${code(path.relative(workspace.root, template.dir))}`,
+          msg`${tag("Created", "success")} ${visibility} package ${code(plan.packageName)} at ${code(shown(plan.packagePath))} from the template -> ${code(shown(template.dir))}`,
         ),
       );
     }),
@@ -266,7 +274,9 @@ const makePublic = Command.make(
 
 /** `[file]: problem`, the ones sync can repair first, each pointing at the command that does. */
 const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Finding>) {
-  const line = (finding: Finding) => msg`[${styled(finding.path, "label")}]: ${finding.problem}`;
+  const shown = yield* shownFromRoot;
+  const line = (finding: Finding) =>
+    msg`[${styled(shown(finding.path), "label")}]: ${finding.problem}`;
   for (const finding of findings.filter((f) => f.fixable)) {
     yield* logError(msg`${line(finding)} (run ${code("vpr cli pkg sync")})`);
   }
@@ -290,8 +300,9 @@ const sync = Command.make(
       // Applied, what sync repaired is no longer a finding; what needs a decision still is.
       const findings = check ? plan.findings : plan.findings.filter((f) => !f.fixable);
       if (!check) {
+        const shown = yield* shownFromRoot;
         for (const file of yield* workspace.apply(plan)) {
-          yield* log(msg`${tag("Wrote", "success")} ${code(file)}`);
+          yield* log(msg`${tag("Wrote", "success")} ${code(shown(file))}`);
         }
       }
       yield* printFindings(findings);
@@ -332,12 +343,13 @@ const rm = Command.make(
 
       // Planned before asking, so a "yes" is never followed by a refusal.
       const plan = yield* workspace.planRemove(name);
+      const shown = yield* shownFromRoot;
       if (!options.yes && !options.dryRun) {
         const confirmed = yield* ask(
           ["--yes"],
           Prompt.run(
             Prompt.Confirm({
-              message: `Delete ${plan.packageName} (${plan.packagePath})?`,
+              message: `Delete ${plan.packageName} (${shown(plan.packagePath)})?`,
               initial: false,
             }),
           ),
@@ -352,7 +364,7 @@ const rm = Command.make(
         options,
         Effect.gen(function* () {
           yield* log(
-            msg`${tag("Removed", "success")} ${code(plan.packageName)} at ${code(plan.packagePath)}`,
+            msg`${tag("Removed", "success")} ${code(plan.packageName)} at ${code(shown(plan.packagePath))}`,
           );
           if (plan.wasPublic) {
             yield* log(

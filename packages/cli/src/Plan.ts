@@ -1,4 +1,4 @@
-import { Data, Effect, type Path } from "effect";
+import { Data, Effect, Path } from "effect";
 import {
   ALL_DEPENDENCY_FIELDS,
   BUILD_DEPENDENCY_FIELDS,
@@ -17,8 +17,9 @@ import {
   referencesIn,
   retargetExtends,
   spliceReferences,
+  toPosix,
 } from "./internal/tsconfig.ts";
-import { type NpmScope, RepoPath, type PackageName, type Visibility } from "./Model.ts";
+import type { NpmScope, PackageName, Visibility } from "./Model.ts";
 import {
   AlreadyExists,
   AlreadyPublic,
@@ -36,11 +37,16 @@ import {
  * workspace and returns a `Plan`: the steps that would carry it out, decided in
  * full before anything is written. Every refusal happens here, so applying a
  * plan only fails when the disk does.
+ *
+ * Paths are absolute inside, under the snapshot's real root, and relative only
+ * at the edges: in text written into config files (relative, with `/`), and
+ * in messages shown to people (relative to the root). Planners take the
+ * platform's `Path` service from context, the same one the disk work uses.
  */
 
 export interface Member {
-  /** `""` for the workspace root. */
-  readonly dir: RepoPath;
+  /** Absolute; the snapshot's `root` for the workspace root. */
+  readonly dir: string;
   readonly kind: "root" | "template" | "package";
   /** The manifest's exact contents. */
   readonly json: JsonObject;
@@ -51,6 +57,8 @@ export interface Member {
 }
 
 export interface Snapshot {
+  /** Absolute, with symlinks resolved, as pnpm reports member paths. */
+  readonly root: string;
   readonly members: ReadonlyArray<Member>;
   readonly fragments: {
     /** Raw text of `fragments/tsconfig.build.json`. */
@@ -72,18 +80,19 @@ export interface Template {
 }
 
 export interface Finding {
-  /** The file the finding is about. */
-  readonly path: RepoPath;
+  /** Absolute path of the file the finding is about. */
+  readonly path: string;
   readonly problem: Message;
   /** `pkg sync` repairs it; otherwise it needs a decision made by hand. */
   readonly fixable: boolean;
 }
 
+/** Every path absolute. */
 export type Step = Data.TaggedEnum<{
   /** Copy a directory from outside the repo into it. */
-  Copy: { readonly from: string; readonly to: RepoPath };
-  Remove: { readonly path: RepoPath };
-  Write: { readonly path: RepoPath; readonly contents: string };
+  Copy: { readonly from: string; readonly to: string };
+  Remove: { readonly path: string };
+  Write: { readonly path: string; readonly contents: string };
 }>;
 export const Step = Data.taggedEnum<Step>();
 
@@ -95,7 +104,8 @@ export interface Plan {
 
 export interface CreatePlan extends Plan {
   readonly packageName: string;
-  readonly packagePath: RepoPath;
+  /** Absolute. */
+  readonly packagePath: string;
 }
 
 export interface MakePublicPlan extends Plan {
@@ -105,12 +115,14 @@ export interface MakePublicPlan extends Plan {
 
 export interface RemovePlan extends Plan {
   readonly packageName: string;
-  readonly packagePath: RepoPath;
+  /** Absolute. */
+  readonly packagePath: string;
   /** A public package may also be on npm, which removing it here leaves untouched. */
   readonly wasPublic: boolean;
 }
 
-export type PathOps = Pick<Path.Path, "join" | "relative" | "resolve">;
+/** The source files a workspace-wide rename reads, keyed by absolute path. */
+export type Sources = ReadonlyMap<string, string>;
 
 export const PACKAGES_DIR = "packages";
 
@@ -119,10 +131,11 @@ export const PROTECTED_PACKAGES: ReadonlyArray<string> = ["cli"];
 
 export const NPM_SCOPE_UNSET = msg`public packages exist but ${code('"monorepoSettings": { "npmScope" }')} is not set`;
 
-const repoPath = (path: PathOps, ...segments: ReadonlyArray<string>) =>
-  RepoPath.make(path.join(...segments));
+const manifestPath = (path: Path.Path, member: Member) => path.join(member.dir, "package.json");
 
-const manifestPath = (path: PathOps, member: Member) => repoPath(path, member.dir, "package.json");
+/** A path as shown to people: relative to the repo root. */
+const shown = (path: Path.Path, snapshot: Snapshot, target: string) =>
+  path.relative(snapshot.root, target);
 
 export const isPrivate = (member: Member) => member.manifest.private === true;
 
@@ -131,46 +144,40 @@ export const npmScope = (snapshot: Snapshot): string | undefined =>
   snapshot.members.find((member) => member.kind === "root")?.manifest.monorepoSettings?.npmScope;
 
 /** Every `<member>/package.json (<field>)` that lists `name`, in any dependency field. */
-export const dependentsOf = (
-  snapshot: Snapshot,
-  name: string,
-  path: PathOps,
-): ReadonlyArray<string> =>
+const dependentsOf = (snapshot: Snapshot, name: string, path: Path.Path): ReadonlyArray<string> =>
   snapshot.members.flatMap((member) =>
     ALL_DEPENDENCY_FIELDS.filter((field) => name in (member.manifest[field] ?? {})).map(
-      (field) => `${manifestPath(path, member)} (${field})`,
+      (field) => `${shown(path, snapshot, manifestPath(path, member))} (${field})`,
     ),
   );
 
-/** `packages/<name>` members that `pkg make-public` may convert, never the CLI. */
-export const privatePackages = (
+/** Names of the `packages/<name>` members that `keep` accepts, never the CLI, sorted. */
+const packagesWhere = Effect.fnUntraced(function* (
   snapshot: Snapshot,
-  path: Pick<Path.Path, "basename" | "dirname">,
-) =>
-  snapshot.members
-    .filter((m) => m.kind === "package" && isPrivate(m) && path.dirname(m.dir) === PACKAGES_DIR)
+  keep: (member: Member) => boolean,
+) {
+  const path = yield* Path.Path;
+  const packagesDir = path.join(snapshot.root, PACKAGES_DIR);
+  return snapshot.members
+    .filter((m) => m.kind === "package" && path.dirname(m.dir) === packagesDir && keep(m))
     .map((m) => path.basename(m.dir))
     .filter((name) => !PROTECTED_PACKAGES.includes(name))
     .sort();
+});
 
-/** `packages/<name>` members that `pkg rm` may delete, never the CLI. */
-export const removablePackages = (
-  snapshot: Snapshot,
-  path: Pick<Path.Path, "basename" | "dirname">,
-) =>
-  snapshot.members
-    .filter((m) => m.kind === "package" && path.dirname(m.dir) === PACKAGES_DIR)
-    .map((m) => path.basename(m.dir))
-    .filter((name) => !PROTECTED_PACKAGES.includes(name))
-    .sort();
+/** `packages/<name>` members that `pkg make-public` may convert. */
+export const privatePackages = (snapshot: Snapshot) => packagesWhere(snapshot, isPrivate);
+
+/** `packages/<name>` members that `pkg rm` may delete. */
+export const removablePackages = (snapshot: Snapshot) => packagesWhere(snapshot, () => true);
 
 /** Sync never deletes, so what a private package should not carry is reported instead. */
-const privateLeftovers = (member: Member, path: PathOps): ReadonlyArray<Finding> => {
+const privateLeftovers = (member: Member, path: Path.Path): ReadonlyArray<Finding> => {
   const leftovers: Array<Finding> = [];
   const advice = "delete it or make the package public";
   if (member.buildConfig !== undefined) {
     leftovers.push({
-      path: repoPath(path, member.dir, BUILD_CONFIG),
+      path: path.join(member.dir, BUILD_CONFIG),
       problem: msg`private package has a build config; ${advice}`,
       fixable: false,
     });
@@ -196,12 +203,8 @@ const outsideScope = (name: string, scope: string): Message => {
     : msg`public package ${code(name)} has no scope, but ${setting} sets one; rename it to ${renamed}`;
 };
 
-/**
- * What every public package must carry, derived from its manifest and the
- * fragments: the publish fields, and a build config referencing each public
- * workspace package it builds against.
- */
-export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
+/** `planSync` with the path service in hand, for the draft to run mid-plan. */
+const syncWith = (snapshot: Snapshot, path: Path.Path): Plan => {
   const byName = new Map(
     snapshot.members.flatMap((member) =>
       member.manifest.name === undefined ? [] : [[member.manifest.name, member] as const],
@@ -251,11 +254,14 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
         });
       }
     }
+    // Written into the file, so relative to the package and with `/` on every platform.
     const references = workspaceDeps
       .filter(({ dependency }) => !isPrivate(dependency))
-      .map(({ dependency }) => path.join(path.relative(member.dir, dependency.dir), BUILD_CONFIG))
+      .map(({ dependency }) =>
+        toPosix(path, path.join(path.relative(member.dir, dependency.dir), BUILD_CONFIG)),
+      )
       .sort();
-    const buildConfigPath = repoPath(path, member.dir, BUILD_CONFIG);
+    const buildConfigPath = path.join(member.dir, BUILD_CONFIG);
     const buildConfig = member.buildConfig ?? snapshot.fragments.buildConfig;
     const referencesStale =
       JSON.stringify(referencesIn(buildConfig)) !== JSON.stringify(references);
@@ -276,7 +282,7 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
   const anyPublic = snapshot.members.some((m) => m.kind !== "root" && !isPrivate(m));
   if (anyPublic && scope === undefined) {
     findings.push({
-      path: RepoPath.make("package.json"),
+      path: path.join(snapshot.root, "package.json"),
       problem: NPM_SCOPE_UNSET,
       fixable: false,
     });
@@ -285,30 +291,39 @@ export const planSync = (snapshot: Snapshot, path: PathOps): Plan => {
 };
 
 /**
+ * What every public package must carry, derived from its manifest and the
+ * fragments: the publish fields, and a build config referencing each public
+ * workspace package it builds against.
+ */
+export const planSync = Effect.fn("Plan.sync")(function* (snapshot: Snapshot) {
+  return syncWith(snapshot, yield* Path.Path);
+});
+
+/**
  * A plan under construction. Writing a member's manifest or build config also
  * updates the snapshot, so a sync run on the draft sees the workspace as the
  * plan leaves it. Writes are keyed by path, so a later write to a file replaces
  * an earlier one rather than adding a second step.
  */
-const makeDraft = (initial: Snapshot, path: PathOps) => {
+const makeDraft = (initial: Snapshot, path: Path.Path) => {
   let snapshot = initial;
   const structural: Array<Step> = [];
-  const writes = new Map<RepoPath, string>();
+  const writes = new Map<string, string>();
 
-  const updateMember = (dir: RepoPath, update: (member: Member) => Member) => {
+  const updateMember = (dir: string, update: (member: Member) => Member) => {
     snapshot = {
       ...snapshot,
       members: snapshot.members.map((member) => (member.dir === dir ? update(member) : member)),
     };
   };
 
-  const write = Effect.fnUntraced(function* (file: RepoPath, contents: string) {
+  const write = Effect.fnUntraced(function* (file: string, contents: string) {
     writes.set(file, contents);
     for (const member of snapshot.members) {
       if (file === manifestPath(path, member)) {
-        const decoded = yield* decodeText(contents, file);
+        const decoded = yield* decodeText(contents, shown(path, snapshot, file));
         updateMember(member.dir, (m) => ({ ...m, ...decoded }));
-      } else if (file === repoPath(path, member.dir, BUILD_CONFIG)) {
+      } else if (file === path.join(member.dir, BUILD_CONFIG)) {
         updateMember(member.dir, (m) => ({ ...m, buildConfig: contents }));
       }
     }
@@ -317,12 +332,12 @@ const makeDraft = (initial: Snapshot, path: PathOps) => {
   return {
     snapshot: () => snapshot,
     /** The text this plan has given `file` so far, if any. */
-    read: (file: RepoPath) => writes.get(file),
+    read: (file: string) => writes.get(file),
     write,
-    copy: (from: string, to: RepoPath) => {
+    copy: (from: string, to: string) => {
       structural.push(Step.Copy({ from, to }));
     },
-    remove: (target: RepoPath) => {
+    remove: (target: string) => {
       structural.push(Step.Remove({ path: target }));
       snapshot = { ...snapshot, members: snapshot.members.filter((m) => m.dir !== target) };
     },
@@ -331,7 +346,7 @@ const makeDraft = (initial: Snapshot, path: PathOps) => {
     },
     /** Fold in the writes sync would make to the workspace as this plan leaves it. */
     sync: Effect.fnUntraced(function* () {
-      for (const step of planSync(snapshot, path).steps) {
+      for (const step of syncWith(snapshot, path).steps) {
         if (step._tag === "Write") {
           yield* write(step.path, step.contents);
         }
@@ -353,7 +368,7 @@ type Draft = ReturnType<typeof makeDraft>;
  */
 const resolveScope = Effect.fnUntraced(function* (
   draft: Draft,
-  path: PathOps,
+  path: Path.Path,
   given: NpmScope | undefined,
 ) {
   const configured = npmScope(draft.snapshot());
@@ -377,14 +392,19 @@ const resolveScope = Effect.fnUntraced(function* (
 });
 
 /** Refuse a member that would publish against a private workspace package. */
-const ensurePublishable = (snapshot: Snapshot, member: Member) => {
+const ensurePublishable = (snapshot: Snapshot, member: Member, path: Path.Path) => {
   const byName = new Map(snapshot.members.map((m) => [m.manifest.name, m]));
   const privateDeps = dependencyNames(member.manifest, BUILD_DEPENDENCY_FIELDS).filter((dep) => {
     const dependency = byName.get(dep);
     return dependency !== undefined && isPrivate(dependency);
   });
   return privateDeps.length > 0
-    ? Effect.fail(new DependsOnPrivate({ dir: member.dir, dependencies: privateDeps }))
+    ? Effect.fail(
+        new DependsOnPrivate({
+          dir: shown(path, snapshot, member.dir),
+          dependencies: privateDeps,
+        }),
+      )
     : Effect.void;
 };
 
@@ -392,18 +412,15 @@ const ensurePublishable = (snapshot: Snapshot, member: Member) => {
  * The step `pkg add --public` and `pkg make-public` share: drop `private` from
  * the member's manifest, then sync so it gains everything a public package carries.
  */
-const publish = Effect.fnUntraced(function* (draft: Draft, dir: RepoPath, path: PathOps) {
+const publish = Effect.fnUntraced(function* (draft: Draft, dir: string, path: Path.Path) {
   const member = draft.snapshot().members.find((m) => m.dir === dir);
   if (member === undefined) {
-    return yield* new PackageNotFound({ dir });
+    return yield* new PackageNotFound({ dir: shown(path, draft.snapshot(), dir) });
   }
   const { private: _private, ...json } = member.json;
   yield* draft.write(manifestPath(path, member), serialize(json));
   yield* draft.sync();
 });
-
-/** The source files a workspace-wide rename reads, keyed by repo path. */
-export type Sources = ReadonlyMap<RepoPath, string>;
 
 /**
  * Make `packages/<name>` public: rename it into the repo's npm scope in every
@@ -413,23 +430,23 @@ export const planMakePublic = Effect.fn("Plan.makePublic")(function* (
   snapshot: Snapshot,
   sources: Sources,
   name: PackageName,
-  path: PathOps,
   scope?: NpmScope,
 ) {
-  const dir = repoPath(path, PACKAGES_DIR, name);
+  const path = yield* Path.Path;
+  const dir = path.join(snapshot.root, PACKAGES_DIR, name);
   const target = snapshot.members.find((member) => member.dir === dir);
   if (target === undefined) {
-    return yield* new PackageNotFound({ dir });
+    return yield* new PackageNotFound({ dir: shown(path, snapshot, dir) });
   }
   if (!isPrivate(target)) {
-    return yield* new AlreadyPublic({ dir });
+    return yield* new AlreadyPublic({ dir: shown(path, snapshot, dir) });
   }
   const draft = makeDraft(snapshot, path);
   const resolved = yield* resolveScope(draft, path, scope);
-  yield* ensurePublishable(snapshot, target);
+  yield* ensurePublishable(snapshot, target, path);
   const from = target.manifest.name;
   if (from === undefined) {
-    return yield* new MissingName({ path: manifestPath(path, target) });
+    return yield* new MissingName({ path: shown(path, snapshot, manifestPath(path, target)) });
   }
   const to = `${resolved}/${from.split("/").pop() ?? name}`;
 
@@ -456,13 +473,12 @@ export const planCreate = Effect.fn("Plan.create")(function* (
   template: Template,
   name: PackageName,
   visibility: Visibility,
-  root: string,
-  path: PathOps,
   scope?: NpmScope,
 ) {
-  const packagePath = repoPath(path, PACKAGES_DIR, name);
+  const path = yield* Path.Path;
+  const packagePath = path.join(snapshot.root, PACKAGES_DIR, name);
   if (snapshot.members.some((member) => member.dir === packagePath)) {
-    return yield* new AlreadyExists({ dir: packagePath });
+    return yield* new AlreadyExists({ dir: shown(path, snapshot, packagePath) });
   }
   const draft = makeDraft(snapshot, path);
   const packageName =
@@ -472,21 +488,22 @@ export const planCreate = Effect.fn("Plan.create")(function* (
 
   // The template's own package name is the string to repoint, so templates are
   // free to name themselves anything without the CLI knowing about it.
+  const templateManifestPath = path.join(template.dir, "package.json");
   const templateManifest = template.files.get("package.json");
   if (templateManifest === undefined) {
-    return yield* new MissingName({ path: path.join(template.dir, "package.json") });
+    return yield* new MissingName({ path: templateManifestPath });
   }
-  const templatePackageName = (yield* decodeText(templateManifest, template.dir)).manifest.name;
+  const templatePackageName = (yield* decodeText(templateManifest, templateManifestPath)).manifest
+    .name;
   if (templatePackageName === undefined) {
-    return yield* new MissingName({ path: path.join(template.dir, "package.json") });
+    return yield* new MissingName({ path: templateManifestPath });
   }
 
   draft.copy(template.dir, packagePath);
   for (const pruned of template.pruned) {
-    draft.remove(repoPath(path, packagePath, pruned));
+    draft.remove(path.join(packagePath, pruned));
   }
 
-  const target = path.resolve(root, packagePath);
   const copied = new Map<string, string>();
   for (const [file, contents] of template.files) {
     if (!hasExtension(file, TEMPLATE_EXTENSIONS)) {
@@ -495,12 +512,15 @@ export const planCreate = Effect.fn("Plan.create")(function* (
     const renamed = contents.replaceAll(templatePackageName, packageName);
     copied.set(
       file,
-      file === "tsconfig.json" ? retargetExtends(renamed, template.dir, target, path) : renamed,
+      file === "tsconfig.json"
+        ? retargetExtends(renamed, template.dir, packagePath, path)
+        : renamed,
     );
   }
 
+  const manifestFile = path.join(packagePath, "package.json");
   const manifestText = copied.get("package.json") ?? templateManifest;
-  const decoded = yield* decodeText(manifestText, repoPath(path, packagePath, "package.json"));
+  const decoded = yield* decodeText(manifestText, shown(path, snapshot, manifestFile));
   const member: Member = {
     dir: packagePath,
     kind: "package",
@@ -508,12 +528,12 @@ export const planCreate = Effect.fn("Plan.create")(function* (
     buildConfig: copied.get(BUILD_CONFIG),
   };
   if (visibility === "public") {
-    yield* ensurePublishable(snapshot, member);
+    yield* ensurePublishable(snapshot, member, path);
   }
   draft.addMember(member);
   for (const [file, contents] of copied) {
     if (contents !== template.files.get(file)) {
-      yield* draft.write(repoPath(path, packagePath, file), contents);
+      yield* draft.write(path.join(packagePath, file), contents);
     }
   }
 
@@ -530,15 +550,15 @@ export const planCreate = Effect.fn("Plan.create")(function* (
 export const planRemove = Effect.fn("Plan.remove")(function* (
   snapshot: Snapshot,
   name: PackageName,
-  path: PathOps,
 ) {
-  const packagePath = repoPath(path, PACKAGES_DIR, name);
+  const path = yield* Path.Path;
+  const packagePath = path.join(snapshot.root, PACKAGES_DIR, name);
   if (PROTECTED_PACKAGES.includes(name)) {
-    return yield* new ProtectedPackage({ dir: packagePath });
+    return yield* new ProtectedPackage({ dir: shown(path, snapshot, packagePath) });
   }
   const target = snapshot.members.find((member) => member.dir === packagePath);
   if (target === undefined) {
-    return yield* new PackageNotFound({ dir: packagePath });
+    return yield* new PackageNotFound({ dir: shown(path, snapshot, packagePath) });
   }
   const packageName = target.manifest.name ?? `@repo/${name}`;
   const dependents = dependentsOf(snapshot, packageName, path);

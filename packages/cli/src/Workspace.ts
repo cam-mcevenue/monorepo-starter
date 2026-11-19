@@ -8,7 +8,7 @@ import {
   WORKSPACE_PRUNE,
 } from "./internal/rename.ts";
 import { BUILD_CONFIG } from "./internal/tsconfig.ts";
-import { type NpmScope, RepoPath, type PackageName, type Visibility } from "./Model.ts";
+import type { NpmScope, PackageName, Visibility } from "./Model.ts";
 import {
   AlreadyExists,
   type AlreadyPublic,
@@ -60,7 +60,7 @@ import * as Toolchain from "./Toolchain.ts";
 export type LoadError = FileSystemFailure | InvalidManifest | ProcessFailure | UnexpectedOutput;
 
 export interface Service {
-  /** Absolute path of the workspace root. */
+  /** Absolute path of the workspace root, with symlinks resolved. */
   readonly root: string;
   /** Template names `pkg add` offers. */
   readonly templates: Effect.Effect<ReadonlyArray<string>, FileSystemFailure>;
@@ -111,7 +111,7 @@ export interface Service {
    */
   readonly apply: (
     plan: Plan,
-  ) => Effect.Effect<ReadonlyArray<RepoPath>, FileSystemFailure | ProcessFailure>;
+  ) => Effect.Effect<ReadonlyArray<string>, FileSystemFailure | ProcessFailure>;
   /** Relink the workspace after members were added, renamed or removed. */
   readonly install: Effect.Effect<void, ProcessFailure>;
 }
@@ -125,11 +125,20 @@ interface Walked {
   readonly pruned: Array<string>;
 }
 
-/** Build the workspace service for `root`, which must already be the workspace root. */
-export const make = Effect.fnUntraced(function* (root: string) {
+/**
+ * Build the workspace service for `given`, which must already be the workspace
+ * root. Every path inside is absolute under its real path: pnpm ls reports real
+ * paths, and on macOS /tmp is a symlink to /private/tmp, so a root reached
+ * through a symlink is resolved once, here.
+ */
+export const make = Effect.fnUntraced(function* (given: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const toolchain = yield* Toolchain.Toolchain;
+  const root = yield* fs.realPath(given).pipe(fileSystemFailure("resolve", given));
+
+  /** Planners take the same platform path service the disk work uses. */
+  const withPath = Effect.provideService(Path.Path, path);
 
   /** Fragments and templates ship inside the CLI package, wherever it runs from. */
   const fragmentsDir = path.resolve(import.meta.dirname, "../fragments");
@@ -148,20 +157,16 @@ export const make = Effect.fnUntraced(function* (root: string) {
 
   /** Every member's manifest and build config, plus the fragments. */
   const load = Effect.fn("Workspace.load")(function* () {
-    // pnpm ls reports real paths, so relate them to the real root: on macOS /tmp
-    // is a symlink to /private/tmp, and a repo can be opened through a symlink.
-    const realRoot = yield* fs.realPath(root).pipe(fileSystemFailure("resolve", root));
     const templates = yield* fs
       .realPath(templatesDir)
       .pipe(fileSystemFailure("resolve", templatesDir));
 
     const members: Array<Member> = [];
-    for (const dir of yield* toolchain.listMembers(realRoot)) {
-      const relative = path.relative(realRoot, dir);
+    for (const dir of yield* toolchain.listMembers(root)) {
       members.push({
-        dir: RepoPath.make(relative),
+        dir,
         kind:
-          relative === ""
+          dir === root
             ? "root"
             : path.relative(templates, dir).startsWith("..")
               ? "package"
@@ -173,6 +178,7 @@ export const make = Effect.fnUntraced(function* (root: string) {
 
     const buildConfigFragment = path.join(fragmentsDir, BUILD_CONFIG);
     const snapshot: Snapshot = {
+      root,
       members,
       fragments: {
         buildConfig: yield* fs
@@ -217,7 +223,7 @@ export const make = Effect.fnUntraced(function* (root: string) {
   const loadSources = Effect.fn("Workspace.loadSources")(function* () {
     const { files } = yield* walk(root, WORKSPACE_PRUNE, WORKSPACE_EXTENSIONS);
     const sources: Sources = new Map(
-      [...files].map(([file, contents]) => [RepoPath.make(file), contents]),
+      [...files].map(([file, contents]) => [path.join(root, file), contents]),
     );
     return sources;
   });
@@ -257,22 +263,22 @@ export const make = Effect.fnUntraced(function* (root: string) {
     scope?: NpmScope,
   ) {
     // A directory that is not a workspace member still blocks the copy.
-    const target = path.join(PACKAGES_DIR, name);
-    if (yield* fs.exists(path.join(root, target)).pipe(fileSystemFailure("stat", target))) {
-      return yield* new AlreadyExists({ dir: target });
+    const target = path.join(root, PACKAGES_DIR, name);
+    if (yield* fs.exists(target).pipe(fileSystemFailure("stat", target))) {
+      return yield* new AlreadyExists({ dir: path.relative(root, target) });
     }
-    return yield* planCreate(yield* load(), chosen, name, visibility, root, path, scope);
+    return yield* planCreate(yield* load(), chosen, name, visibility, scope).pipe(withPath);
   });
 
   const planMakePublicIn = Effect.fn("Workspace.planMakePublic")(function* (
     name: PackageName,
     scope?: NpmScope,
   ) {
-    return yield* planMakePublic(yield* load(), yield* loadSources(), name, path, scope);
+    return yield* planMakePublic(yield* load(), yield* loadSources(), name, scope).pipe(withPath);
   });
 
   const planRemoveIn = Effect.fn("Workspace.planRemove")(function* (name: PackageName) {
-    return yield* planRemove(yield* load(), name, path);
+    return yield* planRemove(yield* load(), name).pipe(withPath);
   });
 
   const apply = Effect.fn("Workspace.apply")(function* (plan: Plan) {
@@ -281,17 +287,15 @@ export const make = Effect.fnUntraced(function* (root: string) {
       plan.steps,
       Step.$match({
         Copy: ({ from, to }) => {
-          copied.push(path.join(root, to));
-          return fs.copy(from, path.join(root, to)).pipe(fileSystemFailure("copy", from));
+          copied.push(to);
+          return fs.copy(from, to).pipe(fileSystemFailure("copy", from));
         },
         Remove: (step) =>
           fs
-            .remove(path.join(root, step.path), { recursive: true, force: true })
+            .remove(step.path, { recursive: true, force: true })
             .pipe(fileSystemFailure("remove", step.path)),
         Write: (step) =>
-          fs
-            .writeFileString(path.join(root, step.path), step.contents)
-            .pipe(fileSystemFailure("write", step.path)),
+          fs.writeFileString(step.path, step.contents).pipe(fileSystemFailure("write", step.path)),
       }),
       { discard: true },
     );
@@ -314,9 +318,9 @@ export const make = Effect.fnUntraced(function* (root: string) {
     templates,
     template,
     npmScope: Effect.map(load(), npmScope),
-    privatePackages: Effect.map(load(), (snapshot) => privatePackages(snapshot, path)),
-    removablePackages: Effect.map(load(), (snapshot) => removablePackages(snapshot, path)),
-    planSync: Effect.map(load(), (snapshot) => planSync(snapshot, path)),
+    privatePackages: load().pipe(Effect.flatMap(privatePackages), withPath),
+    removablePackages: load().pipe(Effect.flatMap(removablePackages), withPath),
+    planSync: load().pipe(Effect.flatMap(planSync), withPath),
     planCreate: planCreateIn,
     planMakePublic: planMakePublicIn,
     planRemove: planRemoveIn,

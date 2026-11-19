@@ -4,7 +4,6 @@ import { Effect, Layer, Stdio } from "effect";
 import { Command, TerminalCapabilities } from "effect/cli";
 import { TestConsole } from "effect/testing";
 import { cli } from "@repo/cli";
-import { RepoPath } from "@repo/cli/Model";
 import { type CreatePlan, type Plan, type RemovePlan, Step, type Template } from "@repo/cli/Plan";
 import * as Workspace from "@repo/cli/Workspace";
 
@@ -15,10 +14,10 @@ import * as Workspace from "@repo/cli/Workspace";
  */
 
 const removePlan: RemovePlan = {
-  steps: [Step.Remove({ path: RepoPath.make("packages/foo") })],
+  steps: [Step.Remove({ path: "/repo/packages/foo" })],
   findings: [],
   packageName: "@repo/foo",
-  packagePath: RepoPath.make("packages/foo"),
+  packagePath: "/repo/packages/foo",
   wasPublic: false,
 };
 
@@ -28,7 +27,7 @@ const createPlan: CreatePlan = {
   steps: [],
   findings: [],
   packageName: "@acme/widget",
-  packagePath: RepoPath.make("packages/widget"),
+  packagePath: "/repo/packages/widget",
 };
 
 const stub = (options: { readonly npmScope?: string } = {}) => {

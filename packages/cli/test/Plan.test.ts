@@ -1,9 +1,10 @@
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it, layer } from "@effect/vitest";
 import * as path from "node:path";
-import { Effect, Schema } from "effect";
+import { NodePath } from "@effect/platform-node";
+import { Effect, Path, Schema } from "effect";
 import { type JsonObject, Manifest } from "@repo/cli/internal/manifest";
 import { type Message, plain } from "@repo/cli/internal/message";
-import { NpmScope, PackageName, RepoPath } from "@repo/cli/Model";
+import { NpmScope, PackageName } from "@repo/cli/Model";
 import {
   type Member,
   type Plan,
@@ -16,6 +17,19 @@ import {
   type Template,
 } from "@repo/cli/Plan";
 
+/**
+ * Fixtures describe a workspace by paths under a root; planners see them
+ * absolute, as loading builds them, and these helpers hand results back
+ * relative so the assertions read like the repo. Planners get Effect's POSIX
+ * path service, so the paths are the same on every platform.
+ */
+const ROOT = "/repo";
+const at = (relative: string) => (relative === "" ? ROOT : path.posix.join(ROOT, relative));
+const fromRoot = (absolute: string) => path.posix.relative(ROOT, absolute);
+
+const run = <A>(effect: Effect.Effect<A, never, Path.Path>) =>
+  Effect.runSync(effect.pipe(Effect.provide(Path.layer)));
+
 /** A member whose decoded view matches its JSON, as loading would build it. */
 const member = (
   dir: string,
@@ -23,7 +37,7 @@ const member = (
   json: JsonObject,
   buildConfig: string | undefined,
 ): Member => ({
-  dir: RepoPath.make(dir),
+  dir: at(dir),
   kind,
   json,
   manifest: Schema.decodeSync(Manifest)(json),
@@ -39,6 +53,7 @@ const buildConfigFragment = `{
 `;
 
 const snapshot = (...members: ReadonlyArray<Member>): Snapshot => ({
+  root: ROOT,
   members: [
     member(
       "",
@@ -66,14 +81,24 @@ const publicPackage = (dir: string, json: JsonObject = {}): Member =>
     buildConfigFragment,
   );
 
-/** Findings with their messages as plain text, as logs and `--check` without a terminal show them. */
-const plainFindings = (findings: ReadonlyArray<{ readonly problem: Message }>) =>
-  findings.map((finding) => ({ ...finding, problem: plain(finding.problem) }));
+/** Findings as `--check` shows them without a terminal: plain text, paths from the root. */
+const plainFindings = (
+  findings: ReadonlyArray<{ readonly path: string; readonly problem: Message }>,
+) =>
+  findings.map((finding) => ({
+    ...finding,
+    path: fromRoot(finding.path),
+    problem: plain(finding.problem),
+  }));
 
-const findingsOf = (snap: Snapshot) => plainFindings(planSync(snap, path).findings);
+const synced = (snap: Snapshot) => run(planSync(snap));
+
+const findingsOf = (snap: Snapshot) => plainFindings(synced(snap).findings);
 
 const writes = (snap: Snapshot) =>
-  planSync(snap, path).steps.flatMap((step) => (step._tag === "Write" ? [step] : []));
+  synced(snap).steps.flatMap((step) =>
+    step._tag === "Write" ? [{ ...step, path: fromRoot(step.path) }] : [],
+  );
 
 const editedManifest = (snap: Snapshot, dir: string) => {
   const edit = writes(snap).find((e) => e.path === `${dir}/package.json`);
@@ -81,6 +106,40 @@ const editedManifest = (snap: Snapshot, dir: string) => {
 };
 
 describe("planSync", () => {
+  it("writes references with / even under Windows paths", () => {
+    const win = path.win32;
+    const root = "C:\\repo";
+    const at = (dir: string, json: JsonObject, kind: Member["kind"] = "package"): Member => ({
+      dir: dir === "" ? root : win.join(root, dir),
+      kind,
+      json,
+      manifest: Schema.decodeSync(Manifest)(json),
+      buildConfig: kind === "root" ? undefined : buildConfigFragment,
+    });
+    const snap: Snapshot = {
+      root,
+      members: [
+        at(
+          "",
+          { name: "monorepo", private: true, monorepoSettings: { npmScope: "@acme" } },
+          "root",
+        ),
+        at("packages\\foo", { name: "@acme/foo", dependencies: { "@acme/bar": "workspace:*" } }),
+        at("packages\\bar", { name: "@acme/bar" }),
+      ],
+      fragments: snapshot().fragments,
+    };
+    const plan = Effect.runSync(planSync(snap).pipe(Effect.provide(NodePath.layerWin32)));
+    const buildConfig = plan.steps.find(
+      (step) =>
+        step._tag === "Write" &&
+        step.path === win.join(root, "packages\\foo", "tsconfig.build.json"),
+    );
+    expect(buildConfig?._tag === "Write" && buildConfig.contents).toContain(
+      '{ "path": "../bar/tsconfig.build.json" }',
+    );
+  });
+
   it("derives publishConfig.exports from exports, mapping src .ts to dist .js", () => {
     const snap = snapshot(
       publicPackage("packages/foo", {
@@ -127,7 +186,7 @@ describe("planSync", () => {
     ]);
 
     const synced = snapshot(publicPackage("packages/foo", editedManifest(stale, "packages/foo")));
-    expect(planSync(synced, path)).toEqual({ steps: [], findings: [] });
+    expect(run(planSync(synced))).toEqual({ steps: [], findings: [] });
   });
 
   it("ignores key order, since the formatter sorts package.json", () => {
@@ -142,7 +201,7 @@ describe("planSync", () => {
           )
         : value;
     const shuffled = snapshot(publicPackage("packages/foo", reversed(synced) as JsonObject));
-    expect(planSync(shuffled, path)).toEqual({ steps: [], findings: [] });
+    expect(run(planSync(shuffled))).toEqual({ steps: [], findings: [] });
   });
 
   it("references the build config of each workspace dep and peer dep, sorted, never dev deps", () => {
@@ -171,7 +230,7 @@ describe("planSync", () => {
 
   it("creates a missing build config from the fragment, even with nothing to reference", () => {
     const snap = snapshot({ ...publicPackage("packages/foo"), buildConfig: undefined });
-    const plan = planSync(snap, path);
+    const plan = synced(snap);
     expect(writes(snap)).toContainEqual({
       _tag: "Write",
       path: "packages/foo/tsconfig.build.json",
@@ -197,7 +256,7 @@ describe("planSync", () => {
       publicPackage("packages/foo", { dependencies: { "@repo/secret": "workspace:*" } }),
       privatePackage("packages/secret"),
     );
-    const plan = planSync(snap, path);
+    const plan = synced(snap);
     expect(plainFindings(plan.findings)).toContainEqual({
       path: "packages/foo/package.json",
       problem: "depends on private workspace package @repo/secret",
@@ -285,7 +344,7 @@ const workspaceOf = (
   const text = (contents: JsonObject | string) =>
     typeof contents === "string" ? contents : `${JSON.stringify(contents, null, 2)}\n`;
   const sources: Sources = new Map(
-    Object.entries(all).map(([file, contents]) => [RepoPath.make(file), text(contents)]),
+    Object.entries(all).map(([file, contents]) => [at(file), text(contents)]),
   );
   const members = Object.entries(all).flatMap(([file, contents]) =>
     path.basename(file) === "package.json" && typeof contents !== "string"
@@ -299,7 +358,7 @@ const workspaceOf = (
         ]
       : [],
   );
-  const snap: Snapshot = { members, fragments: snapshot().fragments };
+  const snap: Snapshot = { root: ROOT, members, fragments: snapshot().fragments };
   return { snapshot: snap, sources };
 };
 
@@ -307,7 +366,7 @@ const name = (value: string) => PackageName.make(value);
 
 /** The text a plan writes to `file`, parsed when it is JSON. */
 const written = (plan: Plan, file: string) => {
-  const step = plan.steps.find((s) => s._tag === "Write" && s.path === file);
+  const step = plan.steps.find((s) => s._tag === "Write" && s.path === at(file));
   return step?._tag === "Write" ? step.contents : undefined;
 };
 const writtenJson = (plan: Plan, file: string) => {
@@ -315,7 +374,7 @@ const writtenJson = (plan: Plan, file: string) => {
   return contents === undefined ? undefined : JSON.parse(contents);
 };
 
-describe("planMakePublic", () => {
+layer(Path.layer)("planMakePublic", (it) => {
   it.effect("renames into the scope across sources and manifests, drops private, and syncs", () =>
     Effect.gen(function* () {
       const { snapshot: snap, sources } = workspaceOf({
@@ -330,7 +389,7 @@ describe("planMakePublic", () => {
         "packages/app/src/main.ts": 'import "@repo/foo/Thing";\nimport "@repo/foo-extra";\n',
       });
 
-      const plan = yield* planMakePublic(snap, sources, name("foo"), path);
+      const plan = yield* planMakePublic(snap, sources, name("foo"));
 
       expect(plan).toMatchObject({ from: "@repo/foo", to: "@acme/foo" });
       const manifest = writtenJson(plan, "packages/foo/package.json");
@@ -359,13 +418,13 @@ describe("planMakePublic", () => {
         { name: "monorepo", private: true },
       );
       const noScope = yield* Effect.flip(
-        planMakePublic(unscoped.snapshot, unscoped.sources, name("foo"), path),
+        planMakePublic(unscoped.snapshot, unscoped.sources, name("foo")),
       );
       expect(noScope._tag).toBe("ScopeUnset");
 
       const published = workspaceOf({ "packages/foo/package.json": { name: "@acme/foo" } });
       const already = yield* Effect.flip(
-        planMakePublic(published.snapshot, published.sources, name("foo"), path),
+        planMakePublic(published.snapshot, published.sources, name("foo")),
       );
       expect(already).toMatchObject({ _tag: "AlreadyPublic", dir: "packages/foo" });
 
@@ -380,7 +439,7 @@ describe("planMakePublic", () => {
         "packages/b/package.json": { name: "@repo/b", private: true },
       });
       const blocked = yield* Effect.flip(
-        planMakePublic(withPrivateDeps.snapshot, withPrivateDeps.sources, name("foo"), path),
+        planMakePublic(withPrivateDeps.snapshot, withPrivateDeps.sources, name("foo")),
       );
       expect(blocked).toMatchObject({
         _tag: "DependsOnPrivate",
@@ -390,7 +449,7 @@ describe("planMakePublic", () => {
   );
 });
 
-describe("planCreate", () => {
+layer(Path.layer)("planCreate", (it) => {
   const template: Template = {
     name: "pkg-lib",
     dir: "/repo/packages/cli/templates/pkg-lib",
@@ -406,12 +465,15 @@ describe("planCreate", () => {
   it.effect("private: copies, prunes, then repoints the name and the extends", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({});
-      const plan = yield* planCreate(snap, template, name("widget"), "private", "/repo", path);
+      const plan = yield* planCreate(snap, template, name("widget"), "private");
 
-      expect(plan).toMatchObject({ packageName: "@repo/widget", packagePath: "packages/widget" });
+      expect(plan).toMatchObject({
+        packageName: "@repo/widget",
+        packagePath: at("packages/widget"),
+      });
       expect(plan.steps.slice(0, 2)).toEqual([
-        { _tag: "Copy", from: template.dir, to: "packages/widget" },
-        { _tag: "Remove", path: "packages/widget/node_modules" },
+        { _tag: "Copy", from: template.dir, to: at("packages/widget") },
+        { _tag: "Remove", path: at("packages/widget/node_modules") },
       ]);
       expect(writtenJson(plan, "packages/widget/package.json").name).toBe("@repo/widget");
       expect(written(plan, "packages/widget/tsconfig.json")).toBe(
@@ -427,7 +489,7 @@ describe("planCreate", () => {
   it.effect("public: names the copy into the scope and gives it a build config", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({});
-      const plan = yield* planCreate(snap, template, name("widget"), "public", "/repo", path);
+      const plan = yield* planCreate(snap, template, name("widget"), "public");
 
       expect(plan.packageName).toBe("@acme/widget");
       const manifest = writtenJson(plan, "packages/widget/package.json");
@@ -442,20 +504,20 @@ describe("planCreate", () => {
     Effect.gen(function* () {
       const taken = workspaceOf({ "packages/widget/package.json": { name: "@repo/widget" } });
       const exists = yield* Effect.flip(
-        planCreate(taken.snapshot, template, name("widget"), "private", "/repo", path),
+        planCreate(taken.snapshot, template, name("widget"), "private"),
       );
       expect(exists._tag).toBe("AlreadyExists");
 
       const unscoped = workspaceOf({}, { name: "monorepo", private: true });
       const noScope = yield* Effect.flip(
-        planCreate(unscoped.snapshot, template, name("widget"), "public", "/repo", path),
+        planCreate(unscoped.snapshot, template, name("widget"), "public"),
       );
       expect(noScope._tag).toBe("ScopeUnset");
     }),
   );
 });
 
-describe("planRemove", () => {
+layer(Path.layer)("planRemove", (it) => {
   it.effect("refuses while any member depends on it, listing each field", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({
@@ -470,7 +532,7 @@ describe("planRemove", () => {
           peerDependencies: { "@acme/foo": "workspace:*" },
         },
       });
-      const refused = yield* Effect.flip(planRemove(snap, name("foo"), path));
+      const refused = yield* Effect.flip(planRemove(snap, name("foo")));
       expect(refused).toMatchObject({
         _tag: "HasDependents",
         packageName: "@acme/foo",
@@ -480,26 +542,22 @@ describe("planRemove", () => {
         ],
       });
 
-      const plan = yield* planRemove(snap, name("app"), path);
+      const plan = yield* planRemove(snap, name("app"));
       expect(plan).toMatchObject({ packageName: "@repo/app", wasPublic: false });
-      expect(plan.steps[0]).toEqual({ _tag: "Remove", path: "packages/app" });
+      expect(plan.steps[0]).toEqual({ _tag: "Remove", path: at("packages/app") });
     }),
   );
 
   it.effect("refuses the CLI itself, and a directory that is not a member", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({});
-      expect((yield* Effect.flip(planRemove(snap, name("cli"), path)))._tag).toBe(
-        "ProtectedPackage",
-      );
-      expect((yield* Effect.flip(planRemove(snap, name("ghost"), path)))._tag).toBe(
-        "PackageNotFound",
-      );
+      expect((yield* Effect.flip(planRemove(snap, name("cli"))))._tag).toBe("ProtectedPackage");
+      expect((yield* Effect.flip(planRemove(snap, name("ghost"))))._tag).toBe("PackageNotFound");
     }),
   );
 });
 
-describe("a scope given for a repo that has none", () => {
+layer(Path.layer)("a scope given for a repo that has none", (it) => {
   const unscopedRoot: JsonObject = { name: "monorepo", private: true, scripts: { x: "@repo/foo" } };
   const scope = NpmScope.make("@given");
 
@@ -509,7 +567,7 @@ describe("a scope given for a repo that has none", () => {
         { "packages/foo/package.json": { name: "@repo/foo", private: true } },
         unscopedRoot,
       );
-      const plan = yield* planMakePublic(snap, sources, name("foo"), path, scope);
+      const plan = yield* planMakePublic(snap, sources, name("foo"), scope);
       expect(plan.to).toBe("@given/foo");
       // The root script names the package, so the rename rewrote the root too.
       expect(writtenJson(plan, "package.json")).toEqual({
@@ -530,15 +588,7 @@ describe("a scope given for a repo that has none", () => {
         files: new Map([["package.json", '{ "name": "@repo/template", "private": true }']]),
         pruned: [],
       };
-      const plan = yield* planCreate(
-        snap,
-        template,
-        name("widget"),
-        "public",
-        "/repo",
-        path,
-        scope,
-      );
+      const plan = yield* planCreate(snap, template, name("widget"), "public", scope);
       expect(plan.packageName).toBe("@given/widget");
       expect(writtenJson(plan, "package.json").monorepoSettings).toEqual({ npmScope: "@given" });
     }),
@@ -549,7 +599,7 @@ describe("a scope given for a repo that has none", () => {
       const { snapshot: snap, sources } = workspaceOf({
         "packages/foo/package.json": { name: "@repo/foo", private: true },
       });
-      const error = yield* Effect.flip(planMakePublic(snap, sources, name("foo"), path, scope));
+      const error = yield* Effect.flip(planMakePublic(snap, sources, name("foo"), scope));
       expect(error).toMatchObject({ _tag: "ScopeMismatch", configured: "@acme", given: "@given" });
     }),
   );

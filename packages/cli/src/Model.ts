@@ -14,13 +14,6 @@ export const decodePackageName = (input: string): Effect.Effect<PackageName, Inv
     Effect.mapError(() => new InvalidName({ input })),
   );
 
-/**
- * A path relative to the repo root, `""` for the root itself. Absolute paths
- * stay plain strings, so the two cannot be mixed up in a list of written files.
- */
-export const RepoPath = Schema.String.pipe(Schema.brand("RepoPath"));
-export type RepoPath = typeof RepoPath.Type;
-
 /** The npm scope public packages publish under, `@` included. */
 export const NpmScope = Schema.String.pipe(
   Schema.check(Schema.isPattern(/^@[a-z0-9][a-z0-9._~-]*$/)),
