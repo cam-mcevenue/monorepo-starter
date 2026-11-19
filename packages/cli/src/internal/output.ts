@@ -1,6 +1,6 @@
 import { Effect, Layer, Predicate } from "effect";
 import { type CliError, CliOutput, TerminalCapabilities } from "effect/cli";
-import { isMessage, type Message, render } from "./message.ts";
+import * as Message from "./message.ts";
 
 /**
  * How the CLI prints its errors: Effect's own formatter, except that one of
@@ -11,9 +11,9 @@ import { isMessage, type Message, render } from "./message.ts";
  */
 
 /** The `text` of the expected error a `UserError` was raised for, if it is one of ours. */
-const textOf = (error: CliError.CliError): Message | undefined => {
+const textOf = (error: CliError.CliError): Message.Message | undefined => {
   const cause = error._tag === "UserError" ? error.cause : undefined;
-  return Predicate.hasProperty(cause, "text") && isMessage(cause.text) ? cause.text : undefined;
+  return Predicate.hasProperty(cause, "text") && Message.is(cause.text) ? cause.text : undefined;
 };
 
 export const formatter = (colors: boolean): CliOutput.Formatter => {
@@ -28,7 +28,7 @@ export const formatter = (colors: boolean): CliOutput.Formatter => {
       const text = textOf(error);
       return text === undefined
         ? base.formatError(error)
-        : `\n${heading}\n  ${render(text, colors)}`;
+        : `\n${heading}\n  ${Message.render(text, colors)}`;
     },
   };
 };

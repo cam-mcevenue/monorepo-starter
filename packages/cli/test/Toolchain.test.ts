@@ -41,7 +41,12 @@ layer(NodeServices.layer)("Toolchain", (it) => {
         const service = yield* Workspace.Workspace;
         expect(yield* service.removablePackages).toEqual(["foo"]);
         const written = yield* service.apply(yield* service.planSync);
-        expect(written).toEqual(["packages/foo/package.json", "packages/foo/tsconfig.build.json"]);
+        // Absolute under the real root, though the workspace was opened through the link.
+        expect(written).toEqual([
+          path.join(yield* fs.realPath(real), "packages/foo/package.json"),
+          path.join(yield* fs.realPath(real), "packages/foo/tsconfig.build.json"),
+        ]);
+        expect(service.root).toBe(yield* fs.realPath(real));
         expect((yield* service.planSync).findings).toEqual([]);
       }).pipe(Effect.provide(workspace));
     }),

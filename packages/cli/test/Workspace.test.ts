@@ -2,8 +2,8 @@ import { NodeServices } from "@effect/platform-node";
 import { describe, expect, layer } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path } from "effect";
 import type { JsonObject } from "@repo/cli/internal/manifest";
-import { PackageName, RepoPath } from "@repo/cli/Model";
-import { Step } from "@repo/cli/Plan";
+import * as Model from "@repo/cli/Model";
+import * as Plan from "@repo/cli/Plan";
 import * as Toolchain from "@repo/cli/Toolchain";
 import * as Workspace from "@repo/cli/Workspace";
 
@@ -91,7 +91,7 @@ layer(NodeServices.layer)("Workspace", (it) => {
           (workspace, root) =>
             Effect.gen(function* () {
               const written = yield* workspace.apply(yield* workspace.planSync);
-              expect(written).toContain("packages/foo/tsconfig.build.json");
+              expect(written).toContain(`${workspace.root}/packages/foo/tsconfig.build.json`);
               expect(formatted).toEqual(written);
               expect(yield* read(root, "packages/foo/tsconfig.build.json")).toContain(
                 '{ "path": "../bar/tsconfig.build.json" }',
@@ -110,7 +110,11 @@ layer(NodeServices.layer)("Workspace", (it) => {
       inWorkspace({}, (workspace, root) =>
         Effect.gen(function* () {
           const template = yield* workspace.template("pkg-effect");
-          const plan = yield* workspace.planCreate(template, PackageName.make("widget"), "public");
+          const plan = yield* workspace.planCreate(
+            template,
+            Model.PackageName.make("widget"),
+            "public",
+          );
           yield* workspace.apply(plan);
 
           expect(plan.packageName).toBe("@acme/widget");
@@ -136,7 +140,7 @@ layer(NodeServices.layer)("Workspace", (it) => {
           Effect.gen(function* () {
             const template = yield* workspace.template("pkg-effect");
             return yield* Effect.flip(
-              workspace.planCreate(template, PackageName.make("widget"), "private"),
+              workspace.planCreate(template, Model.PackageName.make("widget"), "private"),
             );
           }),
         );
@@ -168,9 +172,9 @@ layer(NodeServices.layer)("Workspace", (it) => {
               const failure = yield* Effect.flip(
                 workspace.apply({
                   steps: [
-                    Step.Copy({ from: `${root}/seed`, to: RepoPath.make("packages/copy") }),
+                    Plan.Step.Copy({ from: `${root}/seed`, to: `${root}/packages/copy` }),
                     // A file where a directory is needed, so the write cannot succeed.
-                    Step.Write({ path: RepoPath.make("seed/package.json/x"), contents: "" }),
+                    Plan.Step.Write({ path: `${root}/seed/package.json/x`, contents: "" }),
                   ],
                   findings: [],
                 }),
@@ -191,7 +195,7 @@ layer(NodeServices.layer)("Workspace", (it) => {
         { "packages/app/package.json": { name: "@repo/app", private: true } },
         (workspace, root) =>
           Effect.gen(function* () {
-            yield* workspace.apply(yield* workspace.planRemove(PackageName.make("app")));
+            yield* workspace.apply(yield* workspace.planRemove(Model.PackageName.make("app")));
             expect(yield* exists(root, "packages/app")).toBe(false);
           }),
       ),

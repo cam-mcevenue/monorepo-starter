@@ -1,7 +1,6 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import type { RepoPath } from "./Model.ts";
-import { ProcessFailure, UnexpectedOutput } from "./PackageError.ts";
+import * as PackageError from "./PackageError.ts";
 
 /**
  * The repo's own tools, as the CLI calls them: pnpm to list workspace members,
@@ -13,14 +12,17 @@ export interface Service {
   /** Absolute paths of the workspace members, as pnpm resolves pnpm-workspace.yaml. */
   readonly listMembers: (
     root: string,
-  ) => Effect.Effect<ReadonlyArray<string>, ProcessFailure | UnexpectedOutput>;
+  ) => Effect.Effect<
+    ReadonlyArray<string>,
+    PackageError.ProcessFailure | PackageError.UnexpectedOutput
+  >;
   /** Run the repo formatter over files the CLI wrote as plain `JSON.stringify` output. */
   readonly format: (
     root: string,
-    files: ReadonlyArray<RepoPath>,
-  ) => Effect.Effect<void, ProcessFailure>;
+    files: ReadonlyArray<string>,
+  ) => Effect.Effect<void, PackageError.ProcessFailure>;
   /** Relink the workspace, with the install's output shown as it runs. */
-  readonly install: (root: string) => Effect.Effect<void, ProcessFailure>;
+  readonly install: (root: string) => Effect.Effect<void, PackageError.ProcessFailure>;
 }
 
 export class Toolchain extends Context.Service<Toolchain, Service>()("@repo/cli/Toolchain") {}
@@ -35,9 +37,9 @@ export const make = Effect.gen(function* () {
   const run = Effect.fnUntraced(function* (command: ChildProcess.Command, label: string) {
     const exitCode = yield* spawner
       .exitCode(command)
-      .pipe(Effect.mapError((cause) => new ProcessFailure({ command: label, cause })));
+      .pipe(Effect.mapError((cause) => new PackageError.ProcessFailure({ command: label, cause })));
     if (exitCode !== 0) {
-      return yield* new ProcessFailure({ command: label, exitCode });
+      return yield* new PackageError.ProcessFailure({ command: label, exitCode });
     }
   });
 
@@ -46,16 +48,16 @@ export const make = Effect.gen(function* () {
     const command = `pnpm ${args.join(" ")}`;
     const output = yield* spawner
       .string(ChildProcess.make("pnpm", args, { cwd: root }))
-      .pipe(Effect.mapError((cause) => new ProcessFailure({ command, cause })));
+      .pipe(Effect.mapError((cause) => new PackageError.ProcessFailure({ command, cause })));
     const projects = yield* Schema.decodeEffect(PnpmProjects)(output).pipe(
-      Effect.mapError(() => new UnexpectedOutput({ command, output })),
+      Effect.mapError(() => new PackageError.UnexpectedOutput({ command, output })),
     );
     return projects.map((project) => project.path);
   });
 
   const format = Effect.fn("Toolchain.format")(function* (
     root: string,
-    files: ReadonlyArray<RepoPath>,
+    files: ReadonlyArray<string>,
   ) {
     if (files.length > 0) {
       yield* run(ChildProcess.make("vp", ["fmt", ...files], { cwd: root }), "vp fmt");

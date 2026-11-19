@@ -1,15 +1,9 @@
 import { Effect, Option, Path, Stdio } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/cli";
-import { code, log, logError, msg, plain, styled, tag } from "../message.ts";
-import { decodeNpmScope, decodePackageName, type Visibility } from "../../Model.ts";
-import {
-  ConflictingFlags,
-  MissingInput,
-  nameHint,
-  NothingToChoose,
-  OutOfSync,
-} from "../../PackageError.ts";
-import { type Finding, type Plan, Step } from "../../Plan.ts";
+import * as Message from "../message.ts";
+import * as Model from "../../Model.ts";
+import * as PackageError from "../../PackageError.ts";
+import * as Plan from "../../Plan.ts";
 import * as Workspace from "../../Workspace.ts";
 
 /**
@@ -49,7 +43,7 @@ const ask = Effect.fnUntraced(function* <A, E, R>(
 ) {
   const stdio = yield* Stdio.Stdio;
   if (!(yield* stdio.stdinIsTerminal)) {
-    return yield* new MissingInput({ flags });
+    return yield* new PackageError.MissingInput({ flags });
   }
   return yield* prompt;
 });
@@ -63,13 +57,15 @@ const resolveName = Effect.fnUntraced(function* (provided: Option.Option<string>
           Prompt.String({
             message: "Package name?",
             validate: (value) =>
-              decodePackageName(value).pipe(
-                Effect.mapError(() => plain(msg`Invalid name — ${nameHint}`)),
+              Model.decodePackageName(value).pipe(
+                Effect.mapError(() =>
+                  Message.plain(Message.msg`Invalid name — ${PackageError.nameHint}`),
+                ),
               ),
           }),
         ),
       );
-  return yield* decodePackageName(input);
+  return yield* Model.decodePackageName(input);
 });
 
 /** Pick one of a list, failing when it is empty or nobody can pick. */
@@ -85,7 +81,7 @@ const resolveChoice = Effect.fnUntraced(function* (
   }
   const available = yield* choices;
   if (available.length === 0) {
-    return yield* new NothingToChoose({ what });
+    return yield* new PackageError.NothingToChoose({ what });
   }
   return yield* ask(
     [flag],
@@ -101,7 +97,7 @@ const resolveChoice = Effect.fnUntraced(function* (
 /** `--public`, `--private`, or a prompt when neither is given. */
 const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPrivate: boolean) {
   if (isPublic && isPrivate) {
-    return yield* new ConflictingFlags({ flags: ["--public", "--private"] });
+    return yield* new PackageError.ConflictingFlags({ flags: ["--public", "--private"] });
   }
   if (isPublic || isPrivate) {
     return isPublic ? "public" : "private";
@@ -109,7 +105,7 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
   return yield* ask(
     ["--public", "--private"],
     Prompt.run(
-      Prompt.Select<Visibility>({
+      Prompt.Select<Model.Visibility>({
         message: "Package type?",
         choices: [
           { title: "private (stays in the workspace)", value: "private" },
@@ -120,10 +116,10 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
   );
 });
 
-const SCOPE_EXPLAINER = msg`Public packages publish to npm under a scope, such as ${code("@your-org")}.
+const SCOPE_EXPLAINER = Message.msg`Public packages publish to npm under a scope, such as ${Message.code("@your-org")}.
 This repo has none set yet, so pkg will add
-  ${code('"monorepoSettings": { "npmScope": "<your answer>" }')}
-to the root ${code("package.json")}, and name every public package ${code("<scope>/<name>")}.`;
+  ${Message.code('"monorepoSettings": { "npmScope": "<your answer>" }')}
+to the root ${Message.code("package.json")}, and name every public package ${Message.code("<scope>/<name>")}.`;
 
 /**
  * The scope to record for a repo that has none: `--npm-scope`, or a prompt
@@ -132,7 +128,7 @@ to the root ${code("package.json")}, and name every public package ${code("<scop
  */
 const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string>) {
   if (Option.isSome(provided)) {
-    return yield* decodeNpmScope(provided.value);
+    return yield* Model.decodeNpmScope(provided.value);
   }
   const workspace = yield* Workspace.Workspace;
   if ((yield* workspace.npmScope) !== undefined) {
@@ -140,33 +136,43 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
   }
   const answer = yield* ask(
     ["--npm-scope"],
-    log(SCOPE_EXPLAINER).pipe(
+    Message.log(SCOPE_EXPLAINER).pipe(
       Effect.andThen(
         Prompt.run(
           Prompt.String({
             message: "npm scope?",
             validate: (value) =>
-              decodeNpmScope(value).pipe(Effect.mapError((error) => error.message)),
+              Model.decodeNpmScope(value).pipe(Effect.mapError((error) => error.message)),
           }),
         ),
       ),
     ),
   );
-  return yield* decodeNpmScope(answer);
+  return yield* Model.decodeNpmScope(answer);
 });
 
-/** One line per step, with paths relative to the repo root. */
-const printPlan = Effect.fnUntraced(function* (plan: Plan) {
+/**
+ * Plans carry absolute paths; people read them relative to the repo root. This
+ * is the edge where one becomes the other.
+ */
+const shownFromRoot = Effect.gen(function* () {
   const workspace = yield* Workspace.Workspace;
   const path = yield* Path.Path;
-  yield* log(msg`${tag("Dry run", "caution")} nothing written. Would:`);
+  return (target: string) => path.relative(workspace.root, target);
+});
+
+/** One line per step. */
+const printPlan = Effect.fnUntraced(function* (plan: Plan.Plan) {
+  const shown = yield* shownFromRoot;
+  yield* Message.log(Message.msg`${Message.tag("Dry run", "caution")} nothing written. Would:`);
   for (const step of plan.steps) {
-    yield* log(
-      Step.$match(step, {
+    yield* Message.log(
+      Plan.Step.$match(step, {
         Copy: ({ from, to }) =>
-          msg`  copy   ${code(path.relative(workspace.root, from))} -> ${code(to)}`,
-        Remove: ({ path: target }) => msg`  ${styled("remove", "danger")} ${code(target)}`,
-        Write: ({ path: target }) => msg`  write  ${code(target)}`,
+          Message.msg`  copy   ${Message.code(shown(from))} -> ${Message.code(shown(to))}`,
+        Remove: ({ path: target }) =>
+          Message.msg`  ${Message.styled("remove", "danger")} ${Message.code(shown(target))}`,
+        Write: ({ path: target }) => Message.msg`  write  ${Message.code(shown(target))}`,
       }),
     );
   }
@@ -174,7 +180,7 @@ const printPlan = Effect.fnUntraced(function* (plan: Plan) {
 
 /** Apply the plan and relink, or explain what is left to do; or, under `--dry-run`, print it. */
 const carryOut = Effect.fnUntraced(function* (
-  plan: Plan,
+  plan: Plan.Plan,
   options: { readonly dryRun: boolean; readonly install: boolean },
   done: Effect.Effect<void>,
 ) {
@@ -187,7 +193,9 @@ const carryOut = Effect.fnUntraced(function* (
   if (options.install) {
     yield* workspace.install;
   } else {
-    yield* log(msg`${tag("Next", "info")} run ${code("vp install")} to relink the workspace`);
+    yield* Message.log(
+      Message.msg`${Message.tag("Next", "info")} run ${Message.code("vp install")} to relink the workspace`,
+    );
   }
 });
 
@@ -214,7 +222,7 @@ const add = Command.make(
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Workspace;
-      const path = yield* Path.Path;
+      const shown = yield* shownFromRoot;
       const templateName = yield* resolveChoice(
         options.template,
         "--template",
@@ -233,8 +241,8 @@ const add = Command.make(
       yield* carryOut(
         plan,
         options,
-        log(
-          msg`${tag("Created", "success")} ${visibility} package ${code(plan.packageName)} at ${code(plan.packagePath)} from the template -> ${code(path.relative(workspace.root, template.dir))}`,
+        Message.log(
+          Message.msg`${Message.tag("Created", "success")} ${visibility} package ${Message.code(plan.packageName)} at ${Message.code(shown(plan.packagePath))} from the template -> ${Message.code(shown(template.dir))}`,
         ),
       );
     }),
@@ -246,7 +254,7 @@ const makePublic = Command.make(
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Workspace;
-      const name = yield* decodePackageName(
+      const name = yield* Model.decodePackageName(
         yield* resolveChoice(
           options.name,
           "<name>",
@@ -259,19 +267,25 @@ const makePublic = Command.make(
       yield* carryOut(
         plan,
         options,
-        log(msg`${tag("Made public", "success")} ${code(plan.from)} is now ${code(plan.to)}`),
+        Message.log(
+          Message.msg`${Message.tag("Made public", "success")} ${Message.code(plan.from)} is now ${Message.code(plan.to)}`,
+        ),
       );
     }),
 ).pipe(Command.withDescription("Make a private package in packages/ publishable to npm"));
 
 /** `[file]: problem`, the ones sync can repair first, each pointing at the command that does. */
-const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Finding>) {
-  const line = (finding: Finding) => msg`[${styled(finding.path, "label")}]: ${finding.problem}`;
+const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Plan.Finding>) {
+  const shown = yield* shownFromRoot;
+  const line = (finding: Plan.Finding) =>
+    Message.msg`[${Message.styled(shown(finding.path), "label")}]: ${finding.problem}`;
   for (const finding of findings.filter((f) => f.fixable)) {
-    yield* logError(msg`${line(finding)} (run ${code("vpr cli pkg sync")})`);
+    yield* Message.logError(
+      Message.msg`${line(finding)} (run ${Message.code("vpr cli pkg sync")})`,
+    );
   }
   for (const finding of findings.filter((f) => !f.fixable)) {
-    yield* logError(line(finding));
+    yield* Message.logError(line(finding));
   }
 });
 
@@ -290,13 +304,16 @@ const sync = Command.make(
       // Applied, what sync repaired is no longer a finding; what needs a decision still is.
       const findings = check ? plan.findings : plan.findings.filter((f) => !f.fixable);
       if (!check) {
+        const shown = yield* shownFromRoot;
         for (const file of yield* workspace.apply(plan)) {
-          yield* log(msg`${tag("Wrote", "success")} ${code(file)}`);
+          yield* Message.log(
+            Message.msg`${Message.tag("Wrote", "success")} ${Message.code(shown(file))}`,
+          );
         }
       }
       yield* printFindings(findings);
       if (findings.length > 0) {
-        return yield* new OutOfSync({ count: findings.length });
+        return yield* new PackageError.OutOfSync({ count: findings.length });
       }
     }),
 ).pipe(
@@ -320,7 +337,7 @@ const rm = Command.make(
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Workspace;
-      const name = yield* decodePackageName(
+      const name = yield* Model.decodePackageName(
         yield* resolveChoice(
           options.name,
           "<name>",
@@ -332,18 +349,21 @@ const rm = Command.make(
 
       // Planned before asking, so a "yes" is never followed by a refusal.
       const plan = yield* workspace.planRemove(name);
+      const shown = yield* shownFromRoot;
       if (!options.yes && !options.dryRun) {
         const confirmed = yield* ask(
           ["--yes"],
           Prompt.run(
             Prompt.Confirm({
-              message: `Delete ${plan.packageName} (${plan.packagePath})?`,
+              message: `Delete ${plan.packageName} (${shown(plan.packagePath)})?`,
               initial: false,
             }),
           ),
         );
         if (!confirmed) {
-          return yield* log(msg`${tag("Aborted", "caution")} nothing deleted`);
+          return yield* Message.log(
+            Message.msg`${Message.tag("Aborted", "caution")} nothing deleted`,
+          );
         }
       }
 
@@ -351,12 +371,12 @@ const rm = Command.make(
         plan,
         options,
         Effect.gen(function* () {
-          yield* log(
-            msg`${tag("Removed", "success")} ${code(plan.packageName)} at ${code(plan.packagePath)}`,
+          yield* Message.log(
+            Message.msg`${Message.tag("Removed", "success")} ${Message.code(plan.packageName)} at ${Message.code(shown(plan.packagePath))}`,
           );
           if (plan.wasPublic) {
-            yield* log(
-              msg`${tag("Note", "caution")} any release already on npm is untouched; deprecate it there if needed`,
+            yield* Message.log(
+              Message.msg`${Message.tag("Note", "caution")} any release already on npm is untouched; deprecate it there if needed`,
             );
           }
         }),

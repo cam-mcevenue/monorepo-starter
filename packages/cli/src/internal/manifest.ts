@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { InvalidManifest } from "../PackageError.ts";
+import * as PackageError from "../PackageError.ts";
 
 /**
  * `package.json` as the CLI sees it. A manifest is kept twice: `json` is the
@@ -36,16 +36,19 @@ export interface Decoded {
 export const decodeJson = (
   json: JsonObject,
   path: string,
-): Effect.Effect<Decoded, InvalidManifest> =>
+): Effect.Effect<Decoded, PackageError.InvalidManifest> =>
   Schema.decodeEffect(Manifest)(json).pipe(
     Effect.map((manifest) => ({ json, manifest })),
-    Effect.mapError((error) => new InvalidManifest({ path, issue: error.message })),
+    Effect.mapError((error) => new PackageError.InvalidManifest({ path, issue: error.message })),
   );
 
 /** Decode `package.json` text, failing on bad JSON or a mistyped known field. */
-export const decodeText = (text: string, path: string): Effect.Effect<Decoded, InvalidManifest> =>
+export const decodeText = (
+  text: string,
+  path: string,
+): Effect.Effect<Decoded, PackageError.InvalidManifest> =>
   Schema.decodeEffect(Schema.fromJsonString(Schema.JsonObject))(text).pipe(
-    Effect.mapError((error) => new InvalidManifest({ path, issue: error.message })),
+    Effect.mapError((error) => new PackageError.InvalidManifest({ path, issue: error.message })),
     Effect.flatMap((json) => decodeJson(json, path)),
   );
 

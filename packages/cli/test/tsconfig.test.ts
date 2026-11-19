@@ -31,3 +31,14 @@ it("leaves comments and a package-specifier extends untouched", () => {
   const tsconfig = `{\n  // keep me\n  "extends": "@scope/config/base.json"\n}\n`;
   expect(retargetExtends(tsconfig, "/a/b/c", "/a/b", path)).toBe(tsconfig);
 });
+
+it("writes the retargeted extends with / even under Windows paths", () => {
+  const tsconfig = `{\n  "extends": "../../../../tsconfig.base.json"\n}\n`;
+  const copied = retargetExtends(
+    tsconfig,
+    "C:\\repo\\packages\\cli\\templates\\pkg-effect",
+    "C:\\repo\\packages\\widget",
+    path.win32,
+  );
+  expect(copied).toBe(`{\n  "extends": "../../tsconfig.base.json"\n}\n`);
+});

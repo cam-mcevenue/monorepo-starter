@@ -22,5 +22,5 @@ export const hasExtension = (file: string, extensions: ReadonlyArray<string>) =>
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 /** Not followed by a name character, so renaming @repo/foo leaves @repo/foo-extra alone. */
-export const renameText = (text: string, from: string, to: string) =>
+export const inText = (text: string, from: string, to: string) =>
   text.replace(new RegExp(`${escapeRegExp(from)}(?![\\w-])`, "g"), to);

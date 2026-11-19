@@ -7,6 +7,10 @@ import type { Path } from "effect";
 
 export const BUILD_CONFIG = "tsconfig.build.json";
 
+/** A relative path as written into a config file: `/` between segments on every platform. */
+export const toPosix = (path: Pick<Path.Path, "sep">, relative: string) =>
+  relative.split(path.sep).join("/");
+
 const REFERENCES = /"references"\s*:\s*\[[^\]]*\]/;
 
 /** The `path` of each entry in `references`, or `undefined` when there is no array. */
@@ -37,9 +41,9 @@ export const retargetExtends = (
   contents: string,
   fromDir: string,
   toDir: string,
-  path: Pick<Path.Path, "relative" | "resolve">,
+  path: Pick<Path.Path, "relative" | "resolve" | "sep">,
 ): string =>
   contents.replace(/("extends"\s*:\s*")(\.{1,2}\/[^"]*)"/, (_, prefix: string, from: string) => {
-    const relative = path.relative(toDir, path.resolve(fromDir, from));
+    const relative = toPosix(path, path.relative(toDir, path.resolve(fromDir, from)));
     return `${prefix}${relative.startsWith(".") ? relative : `./${relative}`}"`;
   });
