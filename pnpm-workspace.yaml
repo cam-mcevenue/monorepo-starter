@@ -28,11 +28,11 @@ catalogs:
     "@alchemy.run/doppler": 2.0.0-beta.85
     alchemy: 2.0.0-beta.85
   tooling:
-    "@effect/tsgo": 0.68.0
+    "@effect/tsgo": 0.70.0
     "@types/node": 26.6.6
-    tsrs: 0.24.0-ts7.1.0-beta
-    vite: npm:@voidzero-dev/vite-plus-core@1.6.0
-    vite-plus: 1.6.0
+    tsrs: 7.1.0-beta.tsrs3
+    vite: npm:@voidzero-dev/vite-plus-core@8.3.8000
+    vite-plus: 1.7.0
     vitest: 5.1.0
 
 overrides:
