@@ -1,11 +1,19 @@
 {
   "version": 2,
   "skills": {
-    "effect": {
-      "source": "kitlangton/skills",
+    "code-conventions": {
+      "source": "cam-mcevenue/skills",
+      "commit": "5fea5d4b71243a3b9042fe8e229d3e1a3d742188",
       "sourceType": "github",
-      "skillPath": "skills/effect/SKILL.md",
-      "computedHash": "08df6d7dd3d3f3d5a6658c17b90f6b776912fd566d15c85ac6140030fafc1a9c"
+      "skillPath": "skills/engineering/code-conventions/SKILL.md",
+      "computedHash": "fb6a6fbadb942755dd0da3193d4c7ee37db97cefb7059fbc0e40cb43dcdda3db"
+    },
+    "effect": {
+      "source": "cam-mcevenue/skills",
+      "commit": "5fea5d4b71243a3b9042fe8e229d3e1a3d742188",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/effect/SKILL.md",
+      "computedHash": "b208a24fa80c77a4879e7b6758942d73338f8913f8174cedcdac039e2d64cba6"
     }
   }
 }
