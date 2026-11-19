@@ -19,18 +19,8 @@ import {
   spliceReferences,
   toPosix,
 } from "./internal/tsconfig.ts";
-import type { NpmScope, PackageName, Visibility } from "./Model.ts";
-import {
-  AlreadyExists,
-  AlreadyPublic,
-  DependsOnPrivate,
-  HasDependents,
-  MissingName,
-  PackageNotFound,
-  ProtectedPackage,
-  ScopeMismatch,
-  ScopeUnset,
-} from "./PackageError.ts";
+import type * as Model from "./Model.ts";
+import * as PackageError from "./PackageError.ts";
 
 /**
  * The pure core of every package operation. A planner reads a `Snapshot` of the
@@ -203,7 +193,7 @@ const outsideScope = (name: string, scope: string): Message => {
     : msg`public package ${code(name)} has no scope, but ${setting} sets one; rename it to ${renamed}`;
 };
 
-/** `planSync` with the path service in hand, for the draft to run mid-plan. */
+/** `sync` with the path service in hand, for the draft to run mid-plan. */
 const syncWith = (snapshot: Snapshot, path: Path.Path): Plan => {
   const byName = new Map(
     snapshot.members.flatMap((member) =>
@@ -295,7 +285,7 @@ const syncWith = (snapshot: Snapshot, path: Path.Path): Plan => {
  * fragments: the publish fields, and a build config referencing each public
  * workspace package it builds against.
  */
-export const planSync = Effect.fn("Plan.sync")(function* (snapshot: Snapshot) {
+export const sync = Effect.fn("Plan.sync")(function* (snapshot: Snapshot) {
   return syncWith(snapshot, yield* Path.Path);
 });
 
@@ -369,18 +359,20 @@ type Draft = ReturnType<typeof makeDraft>;
 const resolveScope = Effect.fnUntraced(function* (
   draft: Draft,
   path: Path.Path,
-  given: NpmScope | undefined,
+  given: Model.NpmScope | undefined,
 ) {
   const configured = npmScope(draft.snapshot());
   if (given === undefined) {
-    return configured ?? (yield* new ScopeUnset());
+    return configured ?? (yield* new PackageError.ScopeUnset());
   }
   if (configured !== undefined) {
-    return configured === given ? configured : yield* new ScopeMismatch({ configured, given });
+    return configured === given
+      ? configured
+      : yield* new PackageError.ScopeMismatch({ configured, given });
   }
   const root = draft.snapshot().members.find((member) => member.kind === "root");
   if (root === undefined) {
-    return yield* new PackageNotFound({ dir: "package.json" });
+    return yield* new PackageError.PackageNotFound({ dir: "package.json" });
   }
   const current = root.json["monorepoSettings"];
   const settings: JsonObject = isObject(current) ? current : {};
@@ -400,7 +392,7 @@ const ensurePublishable = (snapshot: Snapshot, member: Member, path: Path.Path) 
   });
   return privateDeps.length > 0
     ? Effect.fail(
-        new DependsOnPrivate({
+        new PackageError.DependsOnPrivate({
           dir: shown(path, snapshot, member.dir),
           dependencies: privateDeps,
         }),
@@ -415,7 +407,7 @@ const ensurePublishable = (snapshot: Snapshot, member: Member, path: Path.Path) 
 const publish = Effect.fnUntraced(function* (draft: Draft, dir: string, path: Path.Path) {
   const member = draft.snapshot().members.find((m) => m.dir === dir);
   if (member === undefined) {
-    return yield* new PackageNotFound({ dir: shown(path, draft.snapshot(), dir) });
+    return yield* new PackageError.PackageNotFound({ dir: shown(path, draft.snapshot(), dir) });
   }
   const { private: _private, ...json } = member.json;
   yield* draft.write(manifestPath(path, member), serialize(json));
@@ -426,27 +418,29 @@ const publish = Effect.fnUntraced(function* (draft: Draft, dir: string, path: Pa
  * Make `packages/<name>` public: rename it into the repo's npm scope in every
  * source file and manifest, drop `private`, and sync.
  */
-export const planMakePublic = Effect.fn("Plan.makePublic")(function* (
+export const makePublic = Effect.fn("Plan.makePublic")(function* (
   snapshot: Snapshot,
   sources: Sources,
-  name: PackageName,
-  scope?: NpmScope,
+  name: Model.PackageName,
+  scope?: Model.NpmScope,
 ) {
   const path = yield* Path.Path;
   const dir = path.join(snapshot.root, PACKAGES_DIR, name);
   const target = snapshot.members.find((member) => member.dir === dir);
   if (target === undefined) {
-    return yield* new PackageNotFound({ dir: shown(path, snapshot, dir) });
+    return yield* new PackageError.PackageNotFound({ dir: shown(path, snapshot, dir) });
   }
   if (!isPrivate(target)) {
-    return yield* new AlreadyPublic({ dir: shown(path, snapshot, dir) });
+    return yield* new PackageError.AlreadyPublic({ dir: shown(path, snapshot, dir) });
   }
   const draft = makeDraft(snapshot, path);
   const resolved = yield* resolveScope(draft, path, scope);
   yield* ensurePublishable(snapshot, target, path);
   const from = target.manifest.name;
   if (from === undefined) {
-    return yield* new MissingName({ path: shown(path, snapshot, manifestPath(path, target)) });
+    return yield* new PackageError.MissingName({
+      path: shown(path, snapshot, manifestPath(path, target)),
+    });
   }
   const to = `${resolved}/${from.split("/").pop() ?? name}`;
 
@@ -468,17 +462,17 @@ export const planMakePublic = Effect.fn("Plan.makePublic")(function* (
  * package is named into the scope as it is copied, then published exactly as
  * `pkg make-public` would.
  */
-export const planCreate = Effect.fn("Plan.create")(function* (
+export const create = Effect.fn("Plan.create")(function* (
   snapshot: Snapshot,
   template: Template,
-  name: PackageName,
-  visibility: Visibility,
-  scope?: NpmScope,
+  name: Model.PackageName,
+  visibility: Model.Visibility,
+  scope?: Model.NpmScope,
 ) {
   const path = yield* Path.Path;
   const packagePath = path.join(snapshot.root, PACKAGES_DIR, name);
   if (snapshot.members.some((member) => member.dir === packagePath)) {
-    return yield* new AlreadyExists({ dir: shown(path, snapshot, packagePath) });
+    return yield* new PackageError.AlreadyExists({ dir: shown(path, snapshot, packagePath) });
   }
   const draft = makeDraft(snapshot, path);
   const packageName =
@@ -491,12 +485,12 @@ export const planCreate = Effect.fn("Plan.create")(function* (
   const templateManifestPath = path.join(template.dir, "package.json");
   const templateManifest = template.files.get("package.json");
   if (templateManifest === undefined) {
-    return yield* new MissingName({ path: templateManifestPath });
+    return yield* new PackageError.MissingName({ path: templateManifestPath });
   }
   const templatePackageName = (yield* decodeText(templateManifest, templateManifestPath)).manifest
     .name;
   if (templatePackageName === undefined) {
-    return yield* new MissingName({ path: templateManifestPath });
+    return yield* new PackageError.MissingName({ path: templateManifestPath });
   }
 
   draft.copy(template.dir, packagePath);
@@ -547,23 +541,23 @@ export const planCreate = Effect.fn("Plan.create")(function* (
  * Delete `packages/<name>`, then sync. Refuses a protected name, a directory
  * that is not a workspace member, and a package any member still depends on.
  */
-export const planRemove = Effect.fn("Plan.remove")(function* (
+export const remove = Effect.fn("Plan.remove")(function* (
   snapshot: Snapshot,
-  name: PackageName,
+  name: Model.PackageName,
 ) {
   const path = yield* Path.Path;
   const packagePath = path.join(snapshot.root, PACKAGES_DIR, name);
   if (PROTECTED_PACKAGES.includes(name)) {
-    return yield* new ProtectedPackage({ dir: shown(path, snapshot, packagePath) });
+    return yield* new PackageError.ProtectedPackage({ dir: shown(path, snapshot, packagePath) });
   }
   const target = snapshot.members.find((member) => member.dir === packagePath);
   if (target === undefined) {
-    return yield* new PackageNotFound({ dir: shown(path, snapshot, packagePath) });
+    return yield* new PackageError.PackageNotFound({ dir: shown(path, snapshot, packagePath) });
   }
   const packageName = target.manifest.name ?? `@repo/${name}`;
   const dependents = dependentsOf(snapshot, packageName, path);
   if (dependents.length > 0) {
-    return yield* new HasDependents({ packageName, dependents });
+    return yield* new PackageError.HasDependents({ packageName, dependents });
   }
 
   const draft = makeDraft(snapshot, path);

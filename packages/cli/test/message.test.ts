@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { CliError } from "effect/cli";
 import { code, join, msg, plain, render, styled, tag } from "@repo/cli/internal/message";
 import { formatter } from "@repo/cli/internal/output";
-import { InvalidName } from "@repo/cli/PackageError";
+import * as PackageError from "@repo/cli/PackageError";
 
 describe("message", () => {
   it("keeps emphasised parts apart, flattening nested messages and lists", () => {
@@ -43,7 +43,7 @@ describe("message", () => {
 });
 
 describe("formatter", () => {
-  const error = new InvalidName({ input: "Bad_Name" });
+  const error = new PackageError.InvalidName({ input: "Bad_Name" });
   const userError = new CliError.UserError({ cause: error, userMessage: error.message });
 
   it("renders this CLI's expected errors from their text, emphasised", () => {

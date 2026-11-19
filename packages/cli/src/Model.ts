@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { InvalidName, InvalidScope } from "./PackageError.ts";
+import * as PackageError from "./PackageError.ts";
 
 /** A package's directory name under `packages/`: lowercase kebab-case, no scope. */
 export const PackageName = Schema.String.pipe(
@@ -9,9 +9,11 @@ export const PackageName = Schema.String.pipe(
 export type PackageName = typeof PackageName.Type;
 
 /** Trimmed first, so an argument and a prompt answer accept the same input. */
-export const decodePackageName = (input: string): Effect.Effect<PackageName, InvalidName> =>
+export const decodePackageName = (
+  input: string,
+): Effect.Effect<PackageName, PackageError.InvalidName> =>
   Schema.decodeEffect(PackageName)(input.trim()).pipe(
-    Effect.mapError(() => new InvalidName({ input })),
+    Effect.mapError(() => new PackageError.InvalidName({ input })),
   );
 
 /** The npm scope public packages publish under, `@` included. */
@@ -22,10 +24,12 @@ export const NpmScope = Schema.String.pipe(
 export type NpmScope = typeof NpmScope.Type;
 
 /** Trimmed, with the `@` added when it was left off, then validated. */
-export const decodeNpmScope = (input: string): Effect.Effect<NpmScope, InvalidScope> => {
+export const decodeNpmScope = (
+  input: string,
+): Effect.Effect<NpmScope, PackageError.InvalidScope> => {
   const trimmed = input.trim();
   return Schema.decodeEffect(NpmScope)(trimmed.startsWith("@") ? trimmed : `@${trimmed}`).pipe(
-    Effect.mapError(() => new InvalidScope({ input })),
+    Effect.mapError(() => new PackageError.InvalidScope({ input })),
   );
 };
 

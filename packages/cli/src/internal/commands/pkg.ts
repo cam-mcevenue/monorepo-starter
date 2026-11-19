@@ -1,15 +1,9 @@
 import { Effect, Option, Path, Stdio } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/cli";
 import { code, log, logError, msg, plain, styled, tag } from "../message.ts";
-import { decodeNpmScope, decodePackageName, type Visibility } from "../../Model.ts";
-import {
-  ConflictingFlags,
-  MissingInput,
-  nameHint,
-  NothingToChoose,
-  OutOfSync,
-} from "../../PackageError.ts";
-import { type Finding, type Plan, Step } from "../../Plan.ts";
+import * as Model from "../../Model.ts";
+import * as PackageError from "../../PackageError.ts";
+import * as Plan from "../../Plan.ts";
 import * as Workspace from "../../Workspace.ts";
 
 /**
@@ -49,7 +43,7 @@ const ask = Effect.fnUntraced(function* <A, E, R>(
 ) {
   const stdio = yield* Stdio.Stdio;
   if (!(yield* stdio.stdinIsTerminal)) {
-    return yield* new MissingInput({ flags });
+    return yield* new PackageError.MissingInput({ flags });
   }
   return yield* prompt;
 });
@@ -63,13 +57,13 @@ const resolveName = Effect.fnUntraced(function* (provided: Option.Option<string>
           Prompt.String({
             message: "Package name?",
             validate: (value) =>
-              decodePackageName(value).pipe(
-                Effect.mapError(() => plain(msg`Invalid name — ${nameHint}`)),
+              Model.decodePackageName(value).pipe(
+                Effect.mapError(() => plain(msg`Invalid name — ${PackageError.nameHint}`)),
               ),
           }),
         ),
       );
-  return yield* decodePackageName(input);
+  return yield* Model.decodePackageName(input);
 });
 
 /** Pick one of a list, failing when it is empty or nobody can pick. */
@@ -85,7 +79,7 @@ const resolveChoice = Effect.fnUntraced(function* (
   }
   const available = yield* choices;
   if (available.length === 0) {
-    return yield* new NothingToChoose({ what });
+    return yield* new PackageError.NothingToChoose({ what });
   }
   return yield* ask(
     [flag],
@@ -101,7 +95,7 @@ const resolveChoice = Effect.fnUntraced(function* (
 /** `--public`, `--private`, or a prompt when neither is given. */
 const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPrivate: boolean) {
   if (isPublic && isPrivate) {
-    return yield* new ConflictingFlags({ flags: ["--public", "--private"] });
+    return yield* new PackageError.ConflictingFlags({ flags: ["--public", "--private"] });
   }
   if (isPublic || isPrivate) {
     return isPublic ? "public" : "private";
@@ -109,7 +103,7 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
   return yield* ask(
     ["--public", "--private"],
     Prompt.run(
-      Prompt.Select<Visibility>({
+      Prompt.Select<Model.Visibility>({
         message: "Package type?",
         choices: [
           { title: "private (stays in the workspace)", value: "private" },
@@ -132,7 +126,7 @@ to the root ${code("package.json")}, and name every public package ${code("<scop
  */
 const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string>) {
   if (Option.isSome(provided)) {
-    return yield* decodeNpmScope(provided.value);
+    return yield* Model.decodeNpmScope(provided.value);
   }
   const workspace = yield* Workspace.Workspace;
   if ((yield* workspace.npmScope) !== undefined) {
@@ -146,13 +140,13 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
           Prompt.String({
             message: "npm scope?",
             validate: (value) =>
-              decodeNpmScope(value).pipe(Effect.mapError((error) => error.message)),
+              Model.decodeNpmScope(value).pipe(Effect.mapError((error) => error.message)),
           }),
         ),
       ),
     ),
   );
-  return yield* decodeNpmScope(answer);
+  return yield* Model.decodeNpmScope(answer);
 });
 
 /**
@@ -166,12 +160,12 @@ const shownFromRoot = Effect.gen(function* () {
 });
 
 /** One line per step. */
-const printPlan = Effect.fnUntraced(function* (plan: Plan) {
+const printPlan = Effect.fnUntraced(function* (plan: Plan.Plan) {
   const shown = yield* shownFromRoot;
   yield* log(msg`${tag("Dry run", "caution")} nothing written. Would:`);
   for (const step of plan.steps) {
     yield* log(
-      Step.$match(step, {
+      Plan.Step.$match(step, {
         Copy: ({ from, to }) => msg`  copy   ${code(shown(from))} -> ${code(shown(to))}`,
         Remove: ({ path: target }) => msg`  ${styled("remove", "danger")} ${code(shown(target))}`,
         Write: ({ path: target }) => msg`  write  ${code(shown(target))}`,
@@ -182,7 +176,7 @@ const printPlan = Effect.fnUntraced(function* (plan: Plan) {
 
 /** Apply the plan and relink, or explain what is left to do; or, under `--dry-run`, print it. */
 const carryOut = Effect.fnUntraced(function* (
-  plan: Plan,
+  plan: Plan.Plan,
   options: { readonly dryRun: boolean; readonly install: boolean },
   done: Effect.Effect<void>,
 ) {
@@ -254,7 +248,7 @@ const makePublic = Command.make(
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Workspace;
-      const name = yield* decodePackageName(
+      const name = yield* Model.decodePackageName(
         yield* resolveChoice(
           options.name,
           "<name>",
@@ -273,9 +267,9 @@ const makePublic = Command.make(
 ).pipe(Command.withDescription("Make a private package in packages/ publishable to npm"));
 
 /** `[file]: problem`, the ones sync can repair first, each pointing at the command that does. */
-const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Finding>) {
+const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Plan.Finding>) {
   const shown = yield* shownFromRoot;
-  const line = (finding: Finding) =>
+  const line = (finding: Plan.Finding) =>
     msg`[${styled(shown(finding.path), "label")}]: ${finding.problem}`;
   for (const finding of findings.filter((f) => f.fixable)) {
     yield* logError(msg`${line(finding)} (run ${code("vpr cli pkg sync")})`);
@@ -307,7 +301,7 @@ const sync = Command.make(
       }
       yield* printFindings(findings);
       if (findings.length > 0) {
-        return yield* new OutOfSync({ count: findings.length });
+        return yield* new PackageError.OutOfSync({ count: findings.length });
       }
     }),
 ).pipe(
@@ -331,7 +325,7 @@ const rm = Command.make(
   (options) =>
     Effect.gen(function* () {
       const workspace = yield* Workspace.Workspace;
-      const name = yield* decodePackageName(
+      const name = yield* Model.decodePackageName(
         yield* resolveChoice(
           options.name,
           "<name>",

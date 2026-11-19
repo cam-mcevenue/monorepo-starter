@@ -4,18 +4,8 @@ import { NodePath } from "@effect/platform-node";
 import { Effect, Path, Schema } from "effect";
 import { type JsonObject, Manifest } from "@repo/cli/internal/manifest";
 import { type Message, plain } from "@repo/cli/internal/message";
-import { NpmScope, PackageName } from "@repo/cli/Model";
-import {
-  type Member,
-  type Plan,
-  planCreate,
-  planMakePublic,
-  planRemove,
-  planSync,
-  type Snapshot,
-  type Sources,
-  type Template,
-} from "@repo/cli/Plan";
+import * as Model from "@repo/cli/Model";
+import * as Plan from "@repo/cli/Plan";
 
 /**
  * Fixtures describe a workspace by paths under a root; planners see them
@@ -33,10 +23,10 @@ const run = <A>(effect: Effect.Effect<A, never, Path.Path>) =>
 /** A member whose decoded view matches its JSON, as loading would build it. */
 const member = (
   dir: string,
-  kind: Member["kind"],
+  kind: Plan.Member["kind"],
   json: JsonObject,
   buildConfig: string | undefined,
-): Member => ({
+): Plan.Member => ({
   dir: at(dir),
   kind,
   json,
@@ -52,7 +42,7 @@ const buildConfigFragment = `{
 }
 `;
 
-const snapshot = (...members: ReadonlyArray<Member>): Snapshot => ({
+const snapshot = (...members: ReadonlyArray<Plan.Member>): Plan.Snapshot => ({
   root: ROOT,
   members: [
     member(
@@ -73,7 +63,7 @@ const snapshot = (...members: ReadonlyArray<Member>): Snapshot => ({
   },
 });
 
-const publicPackage = (dir: string, json: JsonObject = {}): Member =>
+const publicPackage = (dir: string, json: JsonObject = {}): Plan.Member =>
   member(
     dir,
     "package",
@@ -91,32 +81,36 @@ const plainFindings = (
     problem: plain(finding.problem),
   }));
 
-const synced = (snap: Snapshot) => run(planSync(snap));
+const synced = (snap: Plan.Snapshot) => run(Plan.sync(snap));
 
-const findingsOf = (snap: Snapshot) => plainFindings(synced(snap).findings);
+const findingsOf = (snap: Plan.Snapshot) => plainFindings(synced(snap).findings);
 
-const writes = (snap: Snapshot) =>
+const writes = (snap: Plan.Snapshot) =>
   synced(snap).steps.flatMap((step) =>
     step._tag === "Write" ? [{ ...step, path: fromRoot(step.path) }] : [],
   );
 
-const editedManifest = (snap: Snapshot, dir: string) => {
+const editedManifest = (snap: Plan.Snapshot, dir: string) => {
   const edit = writes(snap).find((e) => e.path === `${dir}/package.json`);
   return edit === undefined ? undefined : JSON.parse(edit.contents);
 };
 
-describe("planSync", () => {
+describe("Plan.sync", () => {
   it("writes references with / even under Windows paths", () => {
     const win = path.win32;
     const root = "C:\\repo";
-    const at = (dir: string, json: JsonObject, kind: Member["kind"] = "package"): Member => ({
+    const at = (
+      dir: string,
+      json: JsonObject,
+      kind: Plan.Member["kind"] = "package",
+    ): Plan.Member => ({
       dir: dir === "" ? root : win.join(root, dir),
       kind,
       json,
       manifest: Schema.decodeSync(Manifest)(json),
       buildConfig: kind === "root" ? undefined : buildConfigFragment,
     });
-    const snap: Snapshot = {
+    const snap: Plan.Snapshot = {
       root,
       members: [
         at(
@@ -129,7 +123,7 @@ describe("planSync", () => {
       ],
       fragments: snapshot().fragments,
     };
-    const plan = Effect.runSync(planSync(snap).pipe(Effect.provide(NodePath.layerWin32)));
+    const plan = Effect.runSync(Plan.sync(snap).pipe(Effect.provide(NodePath.layerWin32)));
     const buildConfig = plan.steps.find(
       (step) =>
         step._tag === "Write" &&
@@ -186,7 +180,7 @@ describe("planSync", () => {
     ]);
 
     const synced = snapshot(publicPackage("packages/foo", editedManifest(stale, "packages/foo")));
-    expect(run(planSync(synced))).toEqual({ steps: [], findings: [] });
+    expect(run(Plan.sync(synced))).toEqual({ steps: [], findings: [] });
   });
 
   it("ignores key order, since the formatter sorts package.json", () => {
@@ -201,7 +195,7 @@ describe("planSync", () => {
           )
         : value;
     const shuffled = snapshot(publicPackage("packages/foo", reversed(synced) as JsonObject));
-    expect(run(planSync(shuffled))).toEqual({ steps: [], findings: [] });
+    expect(run(Plan.sync(shuffled))).toEqual({ steps: [], findings: [] });
   });
 
   it("references the build config of each workspace dep and peer dep, sorted, never dev deps", () => {
@@ -243,7 +237,7 @@ describe("planSync", () => {
     });
   });
 
-  const privatePackage = (dir: string, json: JsonObject = {}, buildConfig?: string): Member =>
+  const privatePackage = (dir: string, json: JsonObject = {}, buildConfig?: string): Plan.Member =>
     member(
       dir,
       "package",
@@ -304,7 +298,7 @@ describe("planSync", () => {
   });
 
   it("asks for monorepoSettings.npmScope only once a public package exists", () => {
-    const unscoped = (...members: ReadonlyArray<Member>): Snapshot => {
+    const unscoped = (...members: ReadonlyArray<Plan.Member>): Plan.Snapshot => {
       const base = snapshot(...members);
       return {
         ...base,
@@ -343,7 +337,7 @@ const workspaceOf = (
   const all: Record<string, JsonObject | string> = { "package.json": root, ...files };
   const text = (contents: JsonObject | string) =>
     typeof contents === "string" ? contents : `${JSON.stringify(contents, null, 2)}\n`;
-  const sources: Sources = new Map(
+  const sources: Plan.Sources = new Map(
     Object.entries(all).map(([file, contents]) => [at(file), text(contents)]),
   );
   const members = Object.entries(all).flatMap(([file, contents]) =>
@@ -358,23 +352,23 @@ const workspaceOf = (
         ]
       : [],
   );
-  const snap: Snapshot = { root: ROOT, members, fragments: snapshot().fragments };
+  const snap: Plan.Snapshot = { root: ROOT, members, fragments: snapshot().fragments };
   return { snapshot: snap, sources };
 };
 
-const name = (value: string) => PackageName.make(value);
+const name = (value: string) => Model.PackageName.make(value);
 
 /** The text a plan writes to `file`, parsed when it is JSON. */
-const written = (plan: Plan, file: string) => {
+const written = (plan: Plan.Plan, file: string) => {
   const step = plan.steps.find((s) => s._tag === "Write" && s.path === at(file));
   return step?._tag === "Write" ? step.contents : undefined;
 };
-const writtenJson = (plan: Plan, file: string) => {
+const writtenJson = (plan: Plan.Plan, file: string) => {
   const contents = written(plan, file);
   return contents === undefined ? undefined : JSON.parse(contents);
 };
 
-layer(Path.layer)("planMakePublic", (it) => {
+layer(Path.layer)("Plan.makePublic", (it) => {
   it.effect("renames into the scope across sources and manifests, drops private, and syncs", () =>
     Effect.gen(function* () {
       const { snapshot: snap, sources } = workspaceOf({
@@ -389,7 +383,7 @@ layer(Path.layer)("planMakePublic", (it) => {
         "packages/app/src/main.ts": 'import "@repo/foo/Thing";\nimport "@repo/foo-extra";\n',
       });
 
-      const plan = yield* planMakePublic(snap, sources, name("foo"));
+      const plan = yield* Plan.makePublic(snap, sources, name("foo"));
 
       expect(plan).toMatchObject({ from: "@repo/foo", to: "@acme/foo" });
       const manifest = writtenJson(plan, "packages/foo/package.json");
@@ -418,13 +412,13 @@ layer(Path.layer)("planMakePublic", (it) => {
         { name: "monorepo", private: true },
       );
       const noScope = yield* Effect.flip(
-        planMakePublic(unscoped.snapshot, unscoped.sources, name("foo")),
+        Plan.makePublic(unscoped.snapshot, unscoped.sources, name("foo")),
       );
       expect(noScope._tag).toBe("ScopeUnset");
 
       const published = workspaceOf({ "packages/foo/package.json": { name: "@acme/foo" } });
       const already = yield* Effect.flip(
-        planMakePublic(published.snapshot, published.sources, name("foo")),
+        Plan.makePublic(published.snapshot, published.sources, name("foo")),
       );
       expect(already).toMatchObject({ _tag: "AlreadyPublic", dir: "packages/foo" });
 
@@ -439,7 +433,7 @@ layer(Path.layer)("planMakePublic", (it) => {
         "packages/b/package.json": { name: "@repo/b", private: true },
       });
       const blocked = yield* Effect.flip(
-        planMakePublic(withPrivateDeps.snapshot, withPrivateDeps.sources, name("foo")),
+        Plan.makePublic(withPrivateDeps.snapshot, withPrivateDeps.sources, name("foo")),
       );
       expect(blocked).toMatchObject({
         _tag: "DependsOnPrivate",
@@ -449,8 +443,8 @@ layer(Path.layer)("planMakePublic", (it) => {
   );
 });
 
-layer(Path.layer)("planCreate", (it) => {
-  const template: Template = {
+layer(Path.layer)("Plan.create", (it) => {
+  const template: Plan.Template = {
     name: "pkg-lib",
     dir: "/repo/packages/cli/templates/pkg-lib",
     files: new Map([
@@ -465,7 +459,7 @@ layer(Path.layer)("planCreate", (it) => {
   it.effect("private: copies, prunes, then repoints the name and the extends", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({});
-      const plan = yield* planCreate(snap, template, name("widget"), "private");
+      const plan = yield* Plan.create(snap, template, name("widget"), "private");
 
       expect(plan).toMatchObject({
         packageName: "@repo/widget",
@@ -489,7 +483,7 @@ layer(Path.layer)("planCreate", (it) => {
   it.effect("public: names the copy into the scope and gives it a build config", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({});
-      const plan = yield* planCreate(snap, template, name("widget"), "public");
+      const plan = yield* Plan.create(snap, template, name("widget"), "public");
 
       expect(plan.packageName).toBe("@acme/widget");
       const manifest = writtenJson(plan, "packages/widget/package.json");
@@ -504,20 +498,20 @@ layer(Path.layer)("planCreate", (it) => {
     Effect.gen(function* () {
       const taken = workspaceOf({ "packages/widget/package.json": { name: "@repo/widget" } });
       const exists = yield* Effect.flip(
-        planCreate(taken.snapshot, template, name("widget"), "private"),
+        Plan.create(taken.snapshot, template, name("widget"), "private"),
       );
       expect(exists._tag).toBe("AlreadyExists");
 
       const unscoped = workspaceOf({}, { name: "monorepo", private: true });
       const noScope = yield* Effect.flip(
-        planCreate(unscoped.snapshot, template, name("widget"), "public"),
+        Plan.create(unscoped.snapshot, template, name("widget"), "public"),
       );
       expect(noScope._tag).toBe("ScopeUnset");
     }),
   );
 });
 
-layer(Path.layer)("planRemove", (it) => {
+layer(Path.layer)("Plan.remove", (it) => {
   it.effect("refuses while any member depends on it, listing each field", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({
@@ -532,7 +526,7 @@ layer(Path.layer)("planRemove", (it) => {
           peerDependencies: { "@acme/foo": "workspace:*" },
         },
       });
-      const refused = yield* Effect.flip(planRemove(snap, name("foo")));
+      const refused = yield* Effect.flip(Plan.remove(snap, name("foo")));
       expect(refused).toMatchObject({
         _tag: "HasDependents",
         packageName: "@acme/foo",
@@ -542,7 +536,7 @@ layer(Path.layer)("planRemove", (it) => {
         ],
       });
 
-      const plan = yield* planRemove(snap, name("app"));
+      const plan = yield* Plan.remove(snap, name("app"));
       expect(plan).toMatchObject({ packageName: "@repo/app", wasPublic: false });
       expect(plan.steps[0]).toEqual({ _tag: "Remove", path: at("packages/app") });
     }),
@@ -551,15 +545,15 @@ layer(Path.layer)("planRemove", (it) => {
   it.effect("refuses the CLI itself, and a directory that is not a member", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({});
-      expect((yield* Effect.flip(planRemove(snap, name("cli"))))._tag).toBe("ProtectedPackage");
-      expect((yield* Effect.flip(planRemove(snap, name("ghost"))))._tag).toBe("PackageNotFound");
+      expect((yield* Effect.flip(Plan.remove(snap, name("cli"))))._tag).toBe("ProtectedPackage");
+      expect((yield* Effect.flip(Plan.remove(snap, name("ghost"))))._tag).toBe("PackageNotFound");
     }),
   );
 });
 
 layer(Path.layer)("a scope given for a repo that has none", (it) => {
   const unscopedRoot: JsonObject = { name: "monorepo", private: true, scripts: { x: "@repo/foo" } };
-  const scope = NpmScope.make("@given");
+  const scope = Model.NpmScope.make("@given");
 
   it.effect("make-public records it in the root manifest, which the rename then keeps", () =>
     Effect.gen(function* () {
@@ -567,7 +561,7 @@ layer(Path.layer)("a scope given for a repo that has none", (it) => {
         { "packages/foo/package.json": { name: "@repo/foo", private: true } },
         unscopedRoot,
       );
-      const plan = yield* planMakePublic(snap, sources, name("foo"), scope);
+      const plan = yield* Plan.makePublic(snap, sources, name("foo"), scope);
       expect(plan.to).toBe("@given/foo");
       // The root script names the package, so the rename rewrote the root too.
       expect(writtenJson(plan, "package.json")).toEqual({
@@ -582,13 +576,13 @@ layer(Path.layer)("a scope given for a repo that has none", (it) => {
   it.effect("add names the package into it, and records it", () =>
     Effect.gen(function* () {
       const { snapshot: snap } = workspaceOf({}, { name: "monorepo", private: true });
-      const template: Template = {
+      const template: Plan.Template = {
         name: "pkg-lib",
         dir: "/repo/packages/cli/templates/pkg-lib",
         files: new Map([["package.json", '{ "name": "@repo/template", "private": true }']]),
         pruned: [],
       };
-      const plan = yield* planCreate(snap, template, name("widget"), "public", scope);
+      const plan = yield* Plan.create(snap, template, name("widget"), "public", scope);
       expect(plan.packageName).toBe("@given/widget");
       expect(writtenJson(plan, "package.json").monorepoSettings).toEqual({ npmScope: "@given" });
     }),
@@ -599,7 +593,7 @@ layer(Path.layer)("a scope given for a repo that has none", (it) => {
       const { snapshot: snap, sources } = workspaceOf({
         "packages/foo/package.json": { name: "@repo/foo", private: true },
       });
-      const error = yield* Effect.flip(planMakePublic(snap, sources, name("foo"), scope));
+      const error = yield* Effect.flip(Plan.makePublic(snap, sources, name("foo"), scope));
       expect(error).toMatchObject({ _tag: "ScopeMismatch", configured: "@acme", given: "@given" });
     }),
   );

@@ -4,7 +4,7 @@ import { Effect, Layer, Stdio } from "effect";
 import { Command, TerminalCapabilities } from "effect/cli";
 import { TestConsole } from "effect/testing";
 import { cli } from "@repo/cli";
-import { type CreatePlan, type Plan, type RemovePlan, Step, type Template } from "@repo/cli/Plan";
+import * as Plan from "@repo/cli/Plan";
 import * as Workspace from "@repo/cli/Workspace";
 
 /**
@@ -13,17 +13,17 @@ import * as Workspace from "@repo/cli/Workspace";
  * is never a terminal here, as under an agent or the task runner.
  */
 
-const removePlan: RemovePlan = {
-  steps: [Step.Remove({ path: "/repo/packages/foo" })],
+const removePlan: Plan.RemovePlan = {
+  steps: [Plan.Step.Remove({ path: "/repo/packages/foo" })],
   findings: [],
   packageName: "@repo/foo",
   packagePath: "/repo/packages/foo",
   wasPublic: false,
 };
 
-const template: Template = { name: "pkg-effect", dir: "/t", files: new Map(), pruned: [] };
+const template: Plan.Template = { name: "pkg-effect", dir: "/t", files: new Map(), pruned: [] };
 
-const createPlan: CreatePlan = {
+const createPlan: Plan.CreatePlan = {
   steps: [],
   findings: [],
   packageName: "@acme/widget",
@@ -31,7 +31,7 @@ const createPlan: CreatePlan = {
 };
 
 const stub = (options: { readonly npmScope?: string } = {}) => {
-  const applied: Array<Plan> = [];
+  const applied: Array<Plan.Plan> = [];
   /** The scope each `planCreate` call was given. */
   const scopes: Array<string | undefined> = [];
   let installs = 0;
