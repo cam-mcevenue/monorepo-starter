@@ -1,6 +1,6 @@
 ---
 name: package-development
-description: Package registration. Use when adding a workspace package, making a private package publishable, renaming a package, or moving its workspace path.
+description: Package registration and layout. Use when adding a workspace package, making a private package publishable, renaming a package, moving its workspace path, or deciding what goes in src/ versus src/internal/.
 ---
 
 # Package development
