@@ -2,8 +2,8 @@ import { describe, expect, it, layer } from "@effect/vitest";
 import * as path from "node:path";
 import { NodePath } from "@effect/platform-node";
 import { Effect, Path, Schema } from "effect";
-import { type JsonObject, Manifest } from "@repo/cli/internal/manifest";
-import { type Message, plain } from "@repo/cli/internal/message";
+import * as Manifest from "@repo/cli/internal/manifest";
+import * as Message from "@repo/cli/internal/message";
 import * as Model from "@repo/cli/Model";
 import * as Plan from "@repo/cli/Plan";
 
@@ -24,13 +24,13 @@ const run = <A>(effect: Effect.Effect<A, never, Path.Path>) =>
 const member = (
   dir: string,
   kind: Plan.Member["kind"],
-  json: JsonObject,
+  json: Manifest.JsonObject,
   buildConfig: string | undefined,
 ): Plan.Member => ({
   dir: at(dir),
   kind,
   json,
-  manifest: Schema.decodeSync(Manifest)(json),
+  manifest: Schema.decodeSync(Manifest.Manifest)(json),
   buildConfig,
 });
 
@@ -63,7 +63,7 @@ const snapshot = (...members: ReadonlyArray<Plan.Member>): Plan.Snapshot => ({
   },
 });
 
-const publicPackage = (dir: string, json: JsonObject = {}): Plan.Member =>
+const publicPackage = (dir: string, json: Manifest.JsonObject = {}): Plan.Member =>
   member(
     dir,
     "package",
@@ -71,14 +71,14 @@ const publicPackage = (dir: string, json: JsonObject = {}): Plan.Member =>
     buildConfigFragment,
   );
 
-/** Findings as `--check` shows them without a terminal: plain text, paths from the root. */
+/** Findings as `--check` shows them without a terminal: Message.plain text, paths from the root. */
 const plainFindings = (
-  findings: ReadonlyArray<{ readonly path: string; readonly problem: Message }>,
+  findings: ReadonlyArray<{ readonly path: string; readonly problem: Message.Message }>,
 ) =>
   findings.map((finding) => ({
     ...finding,
     path: fromRoot(finding.path),
-    problem: plain(finding.problem),
+    problem: Message.plain(finding.problem),
   }));
 
 const synced = (snap: Plan.Snapshot) => run(Plan.sync(snap));
@@ -101,13 +101,13 @@ describe("Plan.sync", () => {
     const root = "C:\\repo";
     const at = (
       dir: string,
-      json: JsonObject,
+      json: Manifest.JsonObject,
       kind: Plan.Member["kind"] = "package",
     ): Plan.Member => ({
       dir: dir === "" ? root : win.join(root, dir),
       kind,
       json,
-      manifest: Schema.decodeSync(Manifest)(json),
+      manifest: Schema.decodeSync(Manifest.Manifest)(json),
       buildConfig: kind === "root" ? undefined : buildConfigFragment,
     });
     const snap: Plan.Snapshot = {
@@ -194,7 +194,9 @@ describe("Plan.sync", () => {
               .map(([k, v]) => [k, reversed(v)]),
           )
         : value;
-    const shuffled = snapshot(publicPackage("packages/foo", reversed(synced) as JsonObject));
+    const shuffled = snapshot(
+      publicPackage("packages/foo", reversed(synced) as Manifest.JsonObject),
+    );
     expect(run(Plan.sync(shuffled))).toEqual({ steps: [], findings: [] });
   });
 
@@ -237,7 +239,11 @@ describe("Plan.sync", () => {
     });
   });
 
-  const privatePackage = (dir: string, json: JsonObject = {}, buildConfig?: string): Plan.Member =>
+  const privatePackage = (
+    dir: string,
+    json: Manifest.JsonObject = {},
+    buildConfig?: string,
+  ): Plan.Member =>
     member(
       dir,
       "package",
@@ -331,11 +337,15 @@ describe("Plan.sync", () => {
  * becomes a member, and every file is a source a rename can read.
  */
 const workspaceOf = (
-  files: Record<string, JsonObject | string>,
-  root: JsonObject = { name: "monorepo", private: true, monorepoSettings: { npmScope: "@acme" } },
+  files: Record<string, Manifest.JsonObject | string>,
+  root: Manifest.JsonObject = {
+    name: "monorepo",
+    private: true,
+    monorepoSettings: { npmScope: "@acme" },
+  },
 ) => {
-  const all: Record<string, JsonObject | string> = { "package.json": root, ...files };
-  const text = (contents: JsonObject | string) =>
+  const all: Record<string, Manifest.JsonObject | string> = { "package.json": root, ...files };
+  const text = (contents: Manifest.JsonObject | string) =>
     typeof contents === "string" ? contents : `${JSON.stringify(contents, null, 2)}\n`;
   const sources: Plan.Sources = new Map(
     Object.entries(all).map(([file, contents]) => [at(file), text(contents)]),
@@ -552,7 +562,11 @@ layer(Path.layer)("Plan.remove", (it) => {
 });
 
 layer(Path.layer)("a scope given for a repo that has none", (it) => {
-  const unscopedRoot: JsonObject = { name: "monorepo", private: true, scripts: { x: "@repo/foo" } };
+  const unscopedRoot: Manifest.JsonObject = {
+    name: "monorepo",
+    private: true,
+    scripts: { x: "@repo/foo" },
+  };
   const scope = Model.NpmScope.make("@given");
 
   it.effect("make-public records it in the root manifest, which the rename then keeps", () =>

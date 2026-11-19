@@ -1,24 +1,8 @@
 import { Data, Effect, Path } from "effect";
-import {
-  ALL_DEPENDENCY_FIELDS,
-  BUILD_DEPENDENCY_FIELDS,
-  decodeText,
-  dependencyNames,
-  isObject,
-  type JsonObject,
-  type Manifest,
-  serialize,
-  withPublishFields,
-} from "./internal/manifest.ts";
-import { code, type Message, msg } from "./internal/message.ts";
-import { renameText, TEMPLATE_EXTENSIONS, hasExtension } from "./internal/rename.ts";
-import {
-  BUILD_CONFIG,
-  referencesIn,
-  retargetExtends,
-  spliceReferences,
-  toPosix,
-} from "./internal/tsconfig.ts";
+import * as Manifest from "./internal/manifest.ts";
+import * as Message from "./internal/message.ts";
+import * as Rename from "./internal/rename.ts";
+import * as TsConfig from "./internal/tsconfig.ts";
 import type * as Model from "./Model.ts";
 import * as PackageError from "./PackageError.ts";
 
@@ -39,9 +23,9 @@ export interface Member {
   readonly dir: string;
   readonly kind: "root" | "template" | "package";
   /** The manifest's exact contents. */
-  readonly json: JsonObject;
+  readonly json: Manifest.JsonObject;
   /** The fields of `json` the CLI reads. */
-  readonly manifest: Manifest;
+  readonly manifest: Manifest.Manifest;
   /** Raw `tsconfig.build.json` text, when the file exists. */
   readonly buildConfig: string | undefined;
 }
@@ -54,7 +38,7 @@ export interface Snapshot {
     /** Raw text of `fragments/tsconfig.build.json`. */
     readonly buildConfig: string;
     /** Parsed `fragments/package.public.json`. */
-    readonly manifest: JsonObject;
+    readonly manifest: Manifest.JsonObject;
   };
 }
 
@@ -72,7 +56,7 @@ export interface Template {
 export interface Finding {
   /** Absolute path of the file the finding is about. */
   readonly path: string;
-  readonly problem: Message;
+  readonly problem: Message.Message;
   /** `pkg sync` repairs it; otherwise it needs a decision made by hand. */
   readonly fixable: boolean;
 }
@@ -119,7 +103,7 @@ export const PACKAGES_DIR = "packages";
 /** The dev CLI itself: removing or publishing it with itself is never what you meant. */
 export const PROTECTED_PACKAGES: ReadonlyArray<string> = ["cli"];
 
-export const NPM_SCOPE_UNSET = msg`public packages exist but ${code('"monorepoSettings": { "npmScope" }')} is not set`;
+export const NPM_SCOPE_UNSET = Message.msg`public packages exist but ${Message.code('"monorepoSettings": { "npmScope" }')} is not set`;
 
 const manifestPath = (path: Path.Path, member: Member) => path.join(member.dir, "package.json");
 
@@ -136,7 +120,7 @@ export const npmScope = (snapshot: Snapshot): string | undefined =>
 /** Every `<member>/package.json (<field>)` that lists `name`, in any dependency field. */
 const dependentsOf = (snapshot: Snapshot, name: string, path: Path.Path): ReadonlyArray<string> =>
   snapshot.members.flatMap((member) =>
-    ALL_DEPENDENCY_FIELDS.filter((field) => name in (member.manifest[field] ?? {})).map(
+    Manifest.ALL_DEPENDENCY_FIELDS.filter((field) => name in (member.manifest[field] ?? {})).map(
       (field) => `${shown(path, snapshot, manifestPath(path, member))} (${field})`,
     ),
   );
@@ -167,15 +151,15 @@ const privateLeftovers = (member: Member, path: Path.Path): ReadonlyArray<Findin
   const advice = "delete it or make the package public";
   if (member.buildConfig !== undefined) {
     leftovers.push({
-      path: path.join(member.dir, BUILD_CONFIG),
-      problem: msg`private package has a build config; ${advice}`,
+      path: path.join(member.dir, TsConfig.BUILD_CONFIG),
+      problem: Message.msg`private package has a build config; ${advice}`,
       fixable: false,
     });
   }
   if (member.manifest.publishConfig !== undefined) {
     leftovers.push({
       path: manifestPath(path, member),
-      problem: msg`private package has ${code("publishConfig")}; ${advice}`,
+      problem: Message.msg`private package has ${Message.code("publishConfig")}; ${advice}`,
       fixable: false,
     });
   }
@@ -183,14 +167,14 @@ const privateLeftovers = (member: Member, path: Path.Path): ReadonlyArray<Findin
 };
 
 /** Name the package's scope, the setting it should match, and the name to rename it to. */
-const outsideScope = (name: string, scope: string): Message => {
+const outsideScope = (name: string, scope: string): Message.Message => {
   const [own = "", ...rest] = name.split("/");
   const isScoped = own.startsWith("@") && rest.length > 0;
-  const setting = msg`${code(`"monorepoSettings": { "npmScope": "${scope}" }`)} in the root ${code("package.json")}`;
-  const renamed = code(`${scope}/${isScoped ? rest.join("/") : name}`);
+  const setting = Message.msg`${Message.code(`"monorepoSettings": { "npmScope": "${scope}" }`)} in the root ${Message.code("package.json")}`;
+  const renamed = Message.code(`${scope}/${isScoped ? rest.join("/") : name}`);
   return isScoped
-    ? msg`public package ${code(name)} has scope ${code(own)}, which does not match ${setting}; rename it to ${renamed}`
-    : msg`public package ${code(name)} has no scope, but ${setting} sets one; rename it to ${renamed}`;
+    ? Message.msg`public package ${Message.code(name)} has scope ${Message.code(own)}, which does not match ${setting}; rename it to ${renamed}`
+    : Message.msg`public package ${Message.code(name)} has no scope, but ${setting} sets one; rename it to ${renamed}`;
 };
 
 /** `sync` with the path service in hand, for the draft to run mid-plan. */
@@ -214,12 +198,12 @@ const syncWith = (snapshot: Snapshot, path: Path.Path): Plan => {
     // Compared by value: the formatter owns layout, so text differences are not drift.
     // Key order is safe too: the merge keeps every existing key where it was.
     const manifest = manifestPath(path, member);
-    const json = withPublishFields(member.json, snapshot.fragments.manifest);
+    const json = Manifest.withPublishFields(member.json, snapshot.fragments.manifest);
     if (JSON.stringify(json) !== JSON.stringify(member.json)) {
-      steps.push(Step.Write({ path: manifest, contents: serialize(json) }));
+      steps.push(Step.Write({ path: manifest, contents: Manifest.serialize(json) }));
       findings.push({
         path: manifest,
-        problem: msg`${code("package.json")} is out of sync`,
+        problem: Message.msg`${Message.code("package.json")} is out of sync`,
         fixable: true,
       });
     }
@@ -229,17 +213,18 @@ const syncWith = (snapshot: Snapshot, path: Path.Path): Plan => {
       findings.push({ path: manifest, problem: outsideScope(name, scope), fixable: false });
     }
 
-    const workspaceDeps = dependencyNames(member.manifest, BUILD_DEPENDENCY_FIELDS).flatMap(
-      (name) => {
-        const dependency = byName.get(name);
-        return dependency === undefined ? [] : [{ name, dependency }];
-      },
-    );
+    const workspaceDeps = Manifest.dependencyNames(
+      member.manifest,
+      Manifest.BUILD_DEPENDENCY_FIELDS,
+    ).flatMap((name) => {
+      const dependency = byName.get(name);
+      return dependency === undefined ? [] : [{ name, dependency }];
+    });
     for (const { name, dependency } of workspaceDeps) {
       if (isPrivate(dependency)) {
         findings.push({
           path: manifest,
-          problem: msg`depends on private workspace package ${code(name)}`,
+          problem: Message.msg`depends on private workspace package ${Message.code(name)}`,
           fixable: false,
         });
       }
@@ -248,23 +233,29 @@ const syncWith = (snapshot: Snapshot, path: Path.Path): Plan => {
     const references = workspaceDeps
       .filter(({ dependency }) => !isPrivate(dependency))
       .map(({ dependency }) =>
-        toPosix(path, path.join(path.relative(member.dir, dependency.dir), BUILD_CONFIG)),
+        TsConfig.toPosix(
+          path,
+          path.join(path.relative(member.dir, dependency.dir), TsConfig.BUILD_CONFIG),
+        ),
       )
       .sort();
-    const buildConfigPath = path.join(member.dir, BUILD_CONFIG);
+    const buildConfigPath = path.join(member.dir, TsConfig.BUILD_CONFIG);
     const buildConfig = member.buildConfig ?? snapshot.fragments.buildConfig;
     const referencesStale =
-      JSON.stringify(referencesIn(buildConfig)) !== JSON.stringify(references);
+      JSON.stringify(TsConfig.referencesIn(buildConfig)) !== JSON.stringify(references);
     if (member.buildConfig === undefined || referencesStale) {
       steps.push(
-        Step.Write({ path: buildConfigPath, contents: spliceReferences(buildConfig, references) }),
+        Step.Write({
+          path: buildConfigPath,
+          contents: TsConfig.spliceReferences(buildConfig, references),
+        }),
       );
       findings.push({
         path: buildConfigPath,
         problem:
           member.buildConfig === undefined
-            ? msg`${code(BUILD_CONFIG)} is missing`
-            : msg`${code("references")} are out of sync`,
+            ? Message.msg`${Message.code(TsConfig.BUILD_CONFIG)} is missing`
+            : Message.msg`${Message.code("references")} are out of sync`,
         fixable: true,
       });
     }
@@ -311,9 +302,9 @@ const makeDraft = (initial: Snapshot, path: Path.Path) => {
     writes.set(file, contents);
     for (const member of snapshot.members) {
       if (file === manifestPath(path, member)) {
-        const decoded = yield* decodeText(contents, shown(path, snapshot, file));
+        const decoded = yield* Manifest.decodeText(contents, shown(path, snapshot, file));
         updateMember(member.dir, (m) => ({ ...m, ...decoded }));
-      } else if (file === path.join(member.dir, BUILD_CONFIG)) {
+      } else if (file === path.join(member.dir, TsConfig.BUILD_CONFIG)) {
         updateMember(member.dir, (m) => ({ ...m, buildConfig: contents }));
       }
     }
@@ -375,10 +366,10 @@ const resolveScope = Effect.fnUntraced(function* (
     return yield* new PackageError.PackageNotFound({ dir: "package.json" });
   }
   const current = root.json["monorepoSettings"];
-  const settings: JsonObject = isObject(current) ? current : {};
+  const settings: Manifest.JsonObject = Manifest.isObject(current) ? current : {};
   yield* draft.write(
     manifestPath(path, root),
-    serialize({ ...root.json, monorepoSettings: { ...settings, npmScope: given } }),
+    Manifest.serialize({ ...root.json, monorepoSettings: { ...settings, npmScope: given } }),
   );
   return given;
 });
@@ -386,7 +377,10 @@ const resolveScope = Effect.fnUntraced(function* (
 /** Refuse a member that would publish against a private workspace package. */
 const ensurePublishable = (snapshot: Snapshot, member: Member, path: Path.Path) => {
   const byName = new Map(snapshot.members.map((m) => [m.manifest.name, m]));
-  const privateDeps = dependencyNames(member.manifest, BUILD_DEPENDENCY_FIELDS).filter((dep) => {
+  const privateDeps = Manifest.dependencyNames(
+    member.manifest,
+    Manifest.BUILD_DEPENDENCY_FIELDS,
+  ).filter((dep) => {
     const dependency = byName.get(dep);
     return dependency !== undefined && isPrivate(dependency);
   });
@@ -410,7 +404,7 @@ const publish = Effect.fnUntraced(function* (draft: Draft, dir: string, path: Pa
     return yield* new PackageError.PackageNotFound({ dir: shown(path, draft.snapshot(), dir) });
   }
   const { private: _private, ...json } = member.json;
-  yield* draft.write(manifestPath(path, member), serialize(json));
+  yield* draft.write(manifestPath(path, member), Manifest.serialize(json));
   yield* draft.sync();
 });
 
@@ -447,7 +441,7 @@ export const makePublic = Effect.fn("Plan.makePublic")(function* (
   for (const [file, original] of sources) {
     // Read through the draft: the scope may already have been written to the root manifest.
     const contents = draft.read(file) ?? original;
-    const renamed = renameText(contents, from, to);
+    const renamed = Rename.inText(contents, from, to);
     if (renamed !== contents) {
       yield* draft.write(file, renamed);
     }
@@ -487,8 +481,8 @@ export const create = Effect.fn("Plan.create")(function* (
   if (templateManifest === undefined) {
     return yield* new PackageError.MissingName({ path: templateManifestPath });
   }
-  const templatePackageName = (yield* decodeText(templateManifest, templateManifestPath)).manifest
-    .name;
+  const templatePackageName = (yield* Manifest.decodeText(templateManifest, templateManifestPath))
+    .manifest.name;
   if (templatePackageName === undefined) {
     return yield* new PackageError.MissingName({ path: templateManifestPath });
   }
@@ -500,26 +494,26 @@ export const create = Effect.fn("Plan.create")(function* (
 
   const copied = new Map<string, string>();
   for (const [file, contents] of template.files) {
-    if (!hasExtension(file, TEMPLATE_EXTENSIONS)) {
+    if (!Rename.hasExtension(file, Rename.TEMPLATE_EXTENSIONS)) {
       continue;
     }
     const renamed = contents.replaceAll(templatePackageName, packageName);
     copied.set(
       file,
       file === "tsconfig.json"
-        ? retargetExtends(renamed, template.dir, packagePath, path)
+        ? TsConfig.retargetExtends(renamed, template.dir, packagePath, path)
         : renamed,
     );
   }
 
   const manifestFile = path.join(packagePath, "package.json");
   const manifestText = copied.get("package.json") ?? templateManifest;
-  const decoded = yield* decodeText(manifestText, shown(path, snapshot, manifestFile));
+  const decoded = yield* Manifest.decodeText(manifestText, shown(path, snapshot, manifestFile));
   const member: Member = {
     dir: packagePath,
     kind: "package",
     ...decoded,
-    buildConfig: copied.get(BUILD_CONFIG),
+    buildConfig: copied.get(TsConfig.BUILD_CONFIG),
   };
   if (visibility === "public") {
     yield* ensurePublishable(snapshot, member, path);

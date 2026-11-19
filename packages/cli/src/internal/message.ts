@@ -31,13 +31,13 @@ export interface Message {
 
 type Value = string | number | Styled | Message;
 
-export const isMessage = (value: unknown): value is Message =>
+export const is = (value: unknown): value is Message =>
   Predicate.hasProperty(value, "parts") && Array.isArray(value.parts);
 
 const partsOf = (value: Value): ReadonlyArray<string | Styled> =>
   typeof value === "string" || typeof value === "number"
     ? [String(value)]
-    : isMessage(value)
+    : is(value)
       ? value.parts
       : [value];
 

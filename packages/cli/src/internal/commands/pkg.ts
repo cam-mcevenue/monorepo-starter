@@ -1,6 +1,6 @@
 import { Effect, Option, Path, Stdio } from "effect";
 import { Argument, Command, Flag, Prompt } from "effect/cli";
-import { code, log, logError, msg, plain, styled, tag } from "../message.ts";
+import * as Message from "../message.ts";
 import * as Model from "../../Model.ts";
 import * as PackageError from "../../PackageError.ts";
 import * as Plan from "../../Plan.ts";
@@ -58,7 +58,9 @@ const resolveName = Effect.fnUntraced(function* (provided: Option.Option<string>
             message: "Package name?",
             validate: (value) =>
               Model.decodePackageName(value).pipe(
-                Effect.mapError(() => plain(msg`Invalid name — ${PackageError.nameHint}`)),
+                Effect.mapError(() =>
+                  Message.plain(Message.msg`Invalid name — ${PackageError.nameHint}`),
+                ),
               ),
           }),
         ),
@@ -114,10 +116,10 @@ const resolveVisibility = Effect.fnUntraced(function* (isPublic: boolean, isPriv
   );
 });
 
-const SCOPE_EXPLAINER = msg`Public packages publish to npm under a scope, such as ${code("@your-org")}.
+const SCOPE_EXPLAINER = Message.msg`Public packages publish to npm under a scope, such as ${Message.code("@your-org")}.
 This repo has none set yet, so pkg will add
-  ${code('"monorepoSettings": { "npmScope": "<your answer>" }')}
-to the root ${code("package.json")}, and name every public package ${code("<scope>/<name>")}.`;
+  ${Message.code('"monorepoSettings": { "npmScope": "<your answer>" }')}
+to the root ${Message.code("package.json")}, and name every public package ${Message.code("<scope>/<name>")}.`;
 
 /**
  * The scope to record for a repo that has none: `--npm-scope`, or a prompt
@@ -134,7 +136,7 @@ const resolveScope = Effect.fnUntraced(function* (provided: Option.Option<string
   }
   const answer = yield* ask(
     ["--npm-scope"],
-    log(SCOPE_EXPLAINER).pipe(
+    Message.log(SCOPE_EXPLAINER).pipe(
       Effect.andThen(
         Prompt.run(
           Prompt.String({
@@ -162,13 +164,15 @@ const shownFromRoot = Effect.gen(function* () {
 /** One line per step. */
 const printPlan = Effect.fnUntraced(function* (plan: Plan.Plan) {
   const shown = yield* shownFromRoot;
-  yield* log(msg`${tag("Dry run", "caution")} nothing written. Would:`);
+  yield* Message.log(Message.msg`${Message.tag("Dry run", "caution")} nothing written. Would:`);
   for (const step of plan.steps) {
-    yield* log(
+    yield* Message.log(
       Plan.Step.$match(step, {
-        Copy: ({ from, to }) => msg`  copy   ${code(shown(from))} -> ${code(shown(to))}`,
-        Remove: ({ path: target }) => msg`  ${styled("remove", "danger")} ${code(shown(target))}`,
-        Write: ({ path: target }) => msg`  write  ${code(shown(target))}`,
+        Copy: ({ from, to }) =>
+          Message.msg`  copy   ${Message.code(shown(from))} -> ${Message.code(shown(to))}`,
+        Remove: ({ path: target }) =>
+          Message.msg`  ${Message.styled("remove", "danger")} ${Message.code(shown(target))}`,
+        Write: ({ path: target }) => Message.msg`  write  ${Message.code(shown(target))}`,
       }),
     );
   }
@@ -189,7 +193,9 @@ const carryOut = Effect.fnUntraced(function* (
   if (options.install) {
     yield* workspace.install;
   } else {
-    yield* log(msg`${tag("Next", "info")} run ${code("vp install")} to relink the workspace`);
+    yield* Message.log(
+      Message.msg`${Message.tag("Next", "info")} run ${Message.code("vp install")} to relink the workspace`,
+    );
   }
 });
 
@@ -235,8 +241,8 @@ const add = Command.make(
       yield* carryOut(
         plan,
         options,
-        log(
-          msg`${tag("Created", "success")} ${visibility} package ${code(plan.packageName)} at ${code(shown(plan.packagePath))} from the template -> ${code(shown(template.dir))}`,
+        Message.log(
+          Message.msg`${Message.tag("Created", "success")} ${visibility} package ${Message.code(plan.packageName)} at ${Message.code(shown(plan.packagePath))} from the template -> ${Message.code(shown(template.dir))}`,
         ),
       );
     }),
@@ -261,7 +267,9 @@ const makePublic = Command.make(
       yield* carryOut(
         plan,
         options,
-        log(msg`${tag("Made public", "success")} ${code(plan.from)} is now ${code(plan.to)}`),
+        Message.log(
+          Message.msg`${Message.tag("Made public", "success")} ${Message.code(plan.from)} is now ${Message.code(plan.to)}`,
+        ),
       );
     }),
 ).pipe(Command.withDescription("Make a private package in packages/ publishable to npm"));
@@ -270,12 +278,14 @@ const makePublic = Command.make(
 const printFindings = Effect.fnUntraced(function* (findings: ReadonlyArray<Plan.Finding>) {
   const shown = yield* shownFromRoot;
   const line = (finding: Plan.Finding) =>
-    msg`[${styled(shown(finding.path), "label")}]: ${finding.problem}`;
+    Message.msg`[${Message.styled(shown(finding.path), "label")}]: ${finding.problem}`;
   for (const finding of findings.filter((f) => f.fixable)) {
-    yield* logError(msg`${line(finding)} (run ${code("vpr cli pkg sync")})`);
+    yield* Message.logError(
+      Message.msg`${line(finding)} (run ${Message.code("vpr cli pkg sync")})`,
+    );
   }
   for (const finding of findings.filter((f) => !f.fixable)) {
-    yield* logError(line(finding));
+    yield* Message.logError(line(finding));
   }
 });
 
@@ -296,7 +306,9 @@ const sync = Command.make(
       if (!check) {
         const shown = yield* shownFromRoot;
         for (const file of yield* workspace.apply(plan)) {
-          yield* log(msg`${tag("Wrote", "success")} ${code(shown(file))}`);
+          yield* Message.log(
+            Message.msg`${Message.tag("Wrote", "success")} ${Message.code(shown(file))}`,
+          );
         }
       }
       yield* printFindings(findings);
@@ -349,7 +361,9 @@ const rm = Command.make(
           ),
         );
         if (!confirmed) {
-          return yield* log(msg`${tag("Aborted", "caution")} nothing deleted`);
+          return yield* Message.log(
+            Message.msg`${Message.tag("Aborted", "caution")} nothing deleted`,
+          );
         }
       }
 
@@ -357,12 +371,12 @@ const rm = Command.make(
         plan,
         options,
         Effect.gen(function* () {
-          yield* log(
-            msg`${tag("Removed", "success")} ${code(plan.packageName)} at ${code(shown(plan.packagePath))}`,
+          yield* Message.log(
+            Message.msg`${Message.tag("Removed", "success")} ${Message.code(plan.packageName)} at ${Message.code(shown(plan.packagePath))}`,
           );
           if (plan.wasPublic) {
-            yield* log(
-              msg`${tag("Note", "caution")} any release already on npm is untouched; deprecate it there if needed`,
+            yield* Message.log(
+              Message.msg`${Message.tag("Note", "caution")} any release already on npm is untouched; deprecate it there if needed`,
             );
           }
         }),

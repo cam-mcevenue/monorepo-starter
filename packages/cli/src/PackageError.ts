@@ -1,6 +1,6 @@
 import { Effect, Schema, type PlatformError } from "effect";
 import { CliError } from "effect/cli";
-import { code, join, type Message, msg, plain } from "./internal/message.ts";
+import * as Message from "./internal/message.ts";
 
 /**
  * Every way a package operation can fail. Most are expected: the input or the
@@ -18,10 +18,10 @@ import { code, join, type Message, msg, plain } from "./internal/message.ts";
 export const WORKSPACE_MARKER = "pnpm-workspace.yaml";
 
 /** Shown wherever a name is rejected, at the prompt as well as after it. */
-export const nameHint = msg`use lowercase kebab-case, e.g. ${code("my-package")}`;
+export const nameHint = Message.msg`use lowercase kebab-case, e.g. ${Message.code("my-package")}`;
 
 const scopeSetting = (scope: string) =>
-  msg`${code(`"monorepoSettings": { "npmScope": "${scope}" }`)} in the root ${code("package.json")}`;
+  Message.msg`${Message.code(`"monorepoSettings": { "npmScope": "${scope}" }`)} in the root ${Message.code("package.json")}`;
 
 export class InvalidName extends Schema.TaggedError<
   InvalidName,
@@ -29,14 +29,14 @@ export class InvalidName extends Schema.TaggedError<
 >()("InvalidName", {
   input: Schema.String,
 }) {
-  get text(): Message {
-    return msg`${code(this.input)} is not a valid package name — ${nameHint}`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.input)} is not a valid package name — ${nameHint}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -46,14 +46,14 @@ export class NoWorkspaceRoot extends Schema.TaggedError<
 >()("NoWorkspaceRoot", {
   start: Schema.String,
 }) {
-  get text(): Message {
-    return msg`Could not find ${code(WORKSPACE_MARKER)} in ${code(this.start)} or any parent directory`;
+  get text(): Message.Message {
+    return Message.msg`Could not find ${Message.code(WORKSPACE_MARKER)} in ${Message.code(this.start)} or any parent directory`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -64,14 +64,14 @@ export class UnknownTemplate extends Schema.TaggedError<
   template: Schema.String,
   available: Schema.Array(Schema.String),
 }) {
-  get text(): Message {
-    return msg`Unknown template ${code(this.template)}. Available: ${join(this.available.map(code), ", ")}`;
+  get text(): Message.Message {
+    return Message.msg`Unknown template ${Message.code(this.template)}. Available: ${Message.join(this.available.map(Message.code), ", ")}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -82,14 +82,14 @@ export class NothingToChoose extends Schema.TaggedError<
 >()("NothingToChoose", {
   what: Schema.String,
 }) {
-  get text(): Message {
-    return msg`No ${this.what} found`;
+  get text(): Message.Message {
+    return Message.msg`No ${this.what} found`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -97,14 +97,14 @@ export class ConflictingFlags extends Schema.TaggedError<
   ConflictingFlags,
   { readonly brand: unique symbol }
 >()("ConflictingFlags", { flags: Schema.Array(Schema.String) }) {
-  get text(): Message {
-    return msg`Pass ${join(this.flags.map(code), " or ")}, not both`;
+  get text(): Message.Message {
+    return Message.msg`Pass ${Message.join(this.flags.map(Message.code), " or ")}, not both`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -116,14 +116,14 @@ export class MissingInput extends Schema.TaggedError<
   /** Any one of these answers the prompt. */
   flags: Schema.Array(Schema.String),
 }) {
-  get text(): Message {
-    return msg`stdin is not a terminal, so pass ${join(this.flags.map(code), " or ")} instead of answering a prompt`;
+  get text(): Message.Message {
+    return Message.msg`stdin is not a terminal, so pass ${Message.join(this.flags.map(Message.code), " or ")} instead of answering a prompt`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -133,14 +133,14 @@ export class PackageNotFound extends Schema.TaggedError<
 >()("PackageNotFound", {
   dir: Schema.String,
 }) {
-  get text(): Message {
-    return msg`${code(this.dir)} is not a workspace package`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.dir)} is not a workspace package`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -150,14 +150,14 @@ export class AlreadyExists extends Schema.TaggedError<
 >()("AlreadyExists", {
   dir: Schema.String,
 }) {
-  get text(): Message {
-    return msg`${code(this.dir)} already exists`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.dir)} already exists`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -166,14 +166,14 @@ export class ProtectedPackage extends Schema.TaggedError<
   ProtectedPackage,
   { readonly brand: unique symbol }
 >()("ProtectedPackage", { dir: Schema.String }) {
-  get text(): Message {
-    return msg`${code(this.dir)} is this CLI — delete it by hand if you really mean to`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.dir)} is this CLI — delete it by hand if you really mean to`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -185,18 +185,18 @@ export class HasDependents extends Schema.TaggedError<
   /** Each as `<member>/package.json (<field>)`. */
   dependents: Schema.Array(Schema.String),
 }) {
-  get text(): Message {
-    const list = join(
-      this.dependents.map((dependent) => msg`  ${code(dependent)}`),
+  get text(): Message.Message {
+    const list = Message.join(
+      this.dependents.map((dependent) => Message.msg`  ${Message.code(dependent)}`),
       "\n",
     );
-    return msg`${code(this.packageName)} is still a dependency. Remove it from these first:\n${list}`;
+    return Message.msg`${Message.code(this.packageName)} is still a dependency. Remove it from these first:\n${list}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -204,14 +204,14 @@ export class ScopeUnset extends Schema.TaggedError<ScopeUnset, { readonly brand:
   "ScopeUnset",
   {},
 ) {
-  get text(): Message {
-    return msg`Set the npm scope first: pass ${code("--npm-scope @your-scope")}, or add ${scopeSetting("@your-scope")}`;
+  get text(): Message.Message {
+    return Message.msg`Set the npm scope first: pass ${Message.code("--npm-scope @your-scope")}, or add ${scopeSetting("@your-scope")}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -219,14 +219,14 @@ export class InvalidScope extends Schema.TaggedError<
   InvalidScope,
   { readonly brand: unique symbol }
 >()("InvalidScope", { input: Schema.String }) {
-  get text(): Message {
-    return msg`${code(this.input)} is not a valid npm scope — use a lowercase name such as ${code("@your-org")}`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.input)} is not a valid npm scope — use a lowercase name such as ${Message.code("@your-org")}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -235,14 +235,14 @@ export class ScopeMismatch extends Schema.TaggedError<
   ScopeMismatch,
   { readonly brand: unique symbol }
 >()("ScopeMismatch", { configured: Schema.String, given: Schema.String }) {
-  get text(): Message {
-    return msg`This repo's npm scope is ${code(this.configured)}, not ${code(this.given)}: drop ${code("--npm-scope")}, or change ${scopeSetting(this.configured)}`;
+  get text(): Message.Message {
+    return Message.msg`This repo's npm scope is ${Message.code(this.configured)}, not ${Message.code(this.given)}: drop ${Message.code("--npm-scope")}, or change ${scopeSetting(this.configured)}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -252,14 +252,14 @@ export class AlreadyPublic extends Schema.TaggedError<
 >()("AlreadyPublic", {
   dir: Schema.String,
 }) {
-  get text(): Message {
-    return msg`${code(this.dir)} is already public`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.dir)} is already public`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -267,14 +267,14 @@ export class DependsOnPrivate extends Schema.TaggedError<
   DependsOnPrivate,
   { readonly brand: unique symbol }
 >()("DependsOnPrivate", { dir: Schema.String, dependencies: Schema.Array(Schema.String) }) {
-  get text(): Message {
-    return msg`${code(this.dir)} depends on private workspace packages, make them public first: ${join(this.dependencies.map(code), ", ")}`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.dir)} depends on private workspace packages, make them public first: ${Message.join(this.dependencies.map(Message.code), ", ")}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -284,14 +284,14 @@ export class MissingName extends Schema.TaggedError<
 >()("MissingName", {
   path: Schema.String,
 }) {
-  get text(): Message {
-    return msg`${code(this.path)} has no ${code('"name"')} field`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.path)} has no ${Message.code('"name"')} field`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -303,14 +303,14 @@ export class InvalidManifest extends Schema.TaggedError<
   path: Schema.String,
   issue: Schema.String,
 }) {
-  get text(): Message {
-    return msg`${code(this.path)} is not a valid manifest: ${this.issue}`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code(this.path)} is not a valid manifest: ${this.issue}`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 
@@ -321,14 +321,14 @@ export class OutOfSync extends Schema.TaggedError<OutOfSync, { readonly brand: u
     count: Schema.Int,
   },
 ) {
-  get text(): Message {
-    return msg`${code("pkg sync")}: ${this.count} problem${this.count === 1 ? "" : "s"} found`;
+  get text(): Message.Message {
+    return Message.msg`${Message.code("pkg sync")}: ${this.count} problem${this.count === 1 ? "" : "s"} found`;
   }
   override get message() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
   override get [CliError.userMessage]() {
-    return plain(this.text);
+    return Message.plain(this.text);
   }
 }
 

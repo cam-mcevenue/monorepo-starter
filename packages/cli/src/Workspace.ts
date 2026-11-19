@@ -1,12 +1,6 @@
 import { Context, Effect, FileSystem, Layer, Path } from "effect";
 import { decodeText } from "./internal/manifest.ts";
-import {
-  hasExtension,
-  TEMPLATE_EXTENSIONS,
-  TEMPLATE_PRUNE,
-  WORKSPACE_EXTENSIONS,
-  WORKSPACE_PRUNE,
-} from "./internal/rename.ts";
+import * as Rename from "./internal/rename.ts";
 import { BUILD_CONFIG } from "./internal/tsconfig.ts";
 import type * as Model from "./Model.ts";
 import * as PackageError from "./PackageError.ts";
@@ -190,7 +184,7 @@ export const make = Effect.fnUntraced(function* (given: string) {
         const info = yield* fs.stat(full).pipe(PackageError.fileSystemFailure("stat", full));
         if (info.type === "Directory") {
           yield* walk(full, prune, extensions, relative, found);
-        } else if (hasExtension(entry, extensions)) {
+        } else if (Rename.hasExtension(entry, extensions)) {
           found.files.set(
             relative,
             yield* fs.readFileString(full).pipe(PackageError.fileSystemFailure("read", full)),
@@ -202,7 +196,7 @@ export const make = Effect.fnUntraced(function* (given: string) {
 
   /** Every source file and manifest a workspace-wide rename could touch. */
   const loadSources = Effect.fn("Workspace.loadSources")(function* () {
-    const { files } = yield* walk(root, WORKSPACE_PRUNE, WORKSPACE_EXTENSIONS);
+    const { files } = yield* walk(root, Rename.WORKSPACE_PRUNE, Rename.WORKSPACE_EXTENSIONS);
     const sources: Plan.Sources = new Map(
       [...files].map(([file, contents]) => [path.join(root, file), contents]),
     );
@@ -233,7 +227,7 @@ export const make = Effect.fnUntraced(function* (given: string) {
       return yield* new PackageError.UnknownTemplate({ template: name, available });
     }
     const dir = path.join(templatesDir, name);
-    const { files, pruned } = yield* walk(dir, TEMPLATE_PRUNE, TEMPLATE_EXTENSIONS);
+    const { files, pruned } = yield* walk(dir, Rename.TEMPLATE_PRUNE, Rename.TEMPLATE_EXTENSIONS);
     return { name, dir, files, pruned } satisfies Plan.Template;
   });
 
