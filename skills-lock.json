@@ -3,17 +3,17 @@
   "skills": {
     "code-conventions": {
       "source": "cam-mcevenue/skills",
-      "commit": "5fea5d4b71243a3b9042fe8e229d3e1a3d742188",
+      "commit": "f3ca4c0be392d929e1de1c9ba71f76030ad704fa",
       "sourceType": "github",
-      "skillPath": "skills/engineering/code-conventions/SKILL.md",
-      "computedHash": "fb6a6fbadb942755dd0da3193d4c7ee37db97cefb7059fbc0e40cb43dcdda3db"
+      "skillPath": "skills/cam-mcevenue/code-conventions/SKILL.md",
+      "computedHash": "c11adcd8a836b98443a605fe693e12c1ad5a52ac6213a73720edf278f4357d03"
     },
     "effect": {
       "source": "cam-mcevenue/skills",
-      "commit": "5fea5d4b71243a3b9042fe8e229d3e1a3d742188",
+      "commit": "f3ca4c0be392d929e1de1c9ba71f76030ad704fa",
       "sourceType": "github",
-      "skillPath": "skills/engineering/effect/SKILL.md",
-      "computedHash": "b208a24fa80c77a4879e7b6758942d73338f8913f8174cedcdac039e2d64cba6"
+      "skillPath": "skills/kitlangton/effect/SKILL.md",
+      "computedHash": "050d6f6653dcef088ad0f350e6c91bf276050efb2ba1c4ea6b9c6f98fd8849b8"
     }
   }
 }
