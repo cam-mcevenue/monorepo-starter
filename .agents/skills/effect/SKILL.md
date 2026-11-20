@@ -4,24 +4,37 @@ description: |
   Opinionated guide for building production TypeScript applications with Effect v4. Use when implementing Effect workflows, services, layers, schemas, configuration, schedules, caches, streams, HTTP clients, or tests.
 license: MIT
 compatibility: Requires Effect v4. Examples are reviewed against the version documented in this repository.
+metadata: 
+  author: Kit Langton
+  source: "https://github.com/kitlangton/skills/blob/HEAD/skills/effect/SKILL.md"
+  adapted-by: Cameron McEvenue
+  category: engineering
 ---
 
 # Effect
 
-Use current Effect v4 APIs and the production defaults in this skill. Established project conventions still take precedence unless the task is explicitly changing them.
+Write against the Effect v4 version installed in this workspace, using the production defaults in this skill. Established project conventions still take precedence unless the task is explicitly changing them.
 
 ## Source Rule
 
-Reviewed against Effect **4.0.0**, upstream commit
-[`6389d9ac6`](https://github.com/Effect-TS/effect/tree/6389d9ac64c0f62ccc8b575fb9afc65fc104e814).
-Read `references/V4_APIS.md` when upgrading from v3 or a v4 prerelease.
-The installed version takes precedence: prerelease APIs and import paths can differ.
+The installed `effect` package is the source of truth when:
+
+- What you remember disagrees with this skill (notify the user)
+- This skill disagrees with the installed package (notify the user)
+- The topic is not covered by this skill
+
+Read it from the package or app you are working in, at `<app|package>/node_modules/effect`. The `effect`
+catalog in `pnpm-workspace.yaml` pins one version for the whole workspace, and the `@effect/*`
+packages share that version. Inside the package:
+
+- `AGENTS.md`: upstream's guidance for writing Effect code
+- `ai-docs/src/`: worked examples grouped by area (streams, schedules, testing, HTTP, SQL, CLI, AI)
+- `src/`: the module source, to confirm a signature or import path before you use it
 
 Check these before guessing:
 
 - the nearest `AGENTS.md` and any project-local Effect practices doc
-- the project-pinned `effect` package source and version
-- current upstream Effect source when the installed package does not answer the question
+- the installed `effect` package, as above
 
 ## Branch Chooser
 
