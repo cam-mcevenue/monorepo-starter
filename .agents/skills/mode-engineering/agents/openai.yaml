@@ -1,0 +1,5 @@
+interface:
+  display_name: "Engineering Mode"
+  short_description: "Work on code with the engineering skills"
+policy:
+  allow_implicit_invocation: false

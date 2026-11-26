@@ -1,0 +1,5 @@
+interface:
+  display_name: "How"
+  short_description: "How X works: a code walkthrough"
+policy:
+  allow_implicit_invocation: false

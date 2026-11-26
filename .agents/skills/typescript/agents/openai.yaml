@@ -1,0 +1,5 @@
+interface:
+  display_name: "TypeScript"
+  short_description: "How TypeScript is written and run across my projects"
+policy:
+  allow_implicit_invocation: false

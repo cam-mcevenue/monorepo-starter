@@ -1,0 +1,5 @@
+interface:
+  display_name: "TypeScript Effect"
+  short_description: "Build TypeScript apps with Effect v4"
+policy:
+  allow_implicit_invocation: false

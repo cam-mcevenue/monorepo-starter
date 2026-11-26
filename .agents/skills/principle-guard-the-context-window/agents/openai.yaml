@@ -1,0 +1,5 @@
+interface:
+  display_name: "Principle: Guard the Context Window"
+  short_description: "A working principle that modes and skills read"
+policy:
+  allow_implicit_invocation: false

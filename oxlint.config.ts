@@ -4,8 +4,9 @@ import type { OxlintConfig } from "vite-plus/lint";
 /**
  * The one lint config. `vite.config.ts` imports it for `vpr check`, and editors
  * read it directly. The Effect rules need the Effect-patched Oxlint binding,
- * which `effect-tsgo` loads: the scripts run `effect-tsgo vp`, and
- * `.zed/settings.json` starts the language server as `effect-tsgo oxlint --lsp`.
+ * which `effect-tsgo` loads: the scripts run `effect-tsgo --tsrs-lint vp`, and
+ * `.zed/settings.json` starts the language server as
+ * `effect-tsgo --tsrs-lint oxlint --lsp`.
  */
 export default {
   extends: [recommended],

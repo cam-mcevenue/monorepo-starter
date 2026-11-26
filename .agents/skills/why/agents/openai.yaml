@@ -1,0 +1,5 @@
+interface:
+  display_name: "Why"
+  short_description: "Why X works this way, from the record"
+policy:
+  allow_implicit_invocation: false
