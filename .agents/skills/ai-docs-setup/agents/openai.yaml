@@ -1,0 +1,5 @@
+interface:
+  display_name: "AI Docs Setup"
+  short_description: "Scaffold ai-docs/ in a monorepo"
+policy:
+  allow_implicit_invocation: false

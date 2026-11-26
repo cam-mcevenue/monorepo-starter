@@ -1,0 +1,5 @@
+interface:
+  display_name: "Architect"
+  short_description: "Design deep modules before writing code"
+policy:
+  allow_implicit_invocation: false

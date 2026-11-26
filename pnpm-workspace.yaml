@@ -52,6 +52,9 @@ minimumReleaseAge: 0
 # which one started them.
 pmOnFail: ignore
 
+# Matches the development machines and the Docker sandbox. An x64 machine can't
+# install: pnpm won't fetch the x64 binaries for vite-plus and @effect/tsgo. CI
+# needs ARM runners (ubuntu-24.04-arm) or x64 added to cpu; ubuntu-latest is x64.
 supportedArchitectures:
   os: [darwin, linux]
   cpu: [arm64]

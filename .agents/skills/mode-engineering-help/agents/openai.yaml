@@ -1,0 +1,5 @@
+interface:
+  display_name: "Engineering Mode Help"
+  short_description: "Find the right skill or flow in engineering mode"
+policy:
+  allow_implicit_invocation: false

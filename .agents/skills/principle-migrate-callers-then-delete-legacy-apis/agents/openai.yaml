@@ -1,0 +1,5 @@
+interface:
+  display_name: "Principle: Migrate Callers Then Delete Legacy APIs"
+  short_description: "A working principle that modes and skills read"
+policy:
+  allow_implicit_invocation: false

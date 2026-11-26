@@ -1,0 +1,5 @@
+interface:
+  display_name: "Core Skills"
+  short_description: "Where skills live and when to read them"
+policy:
+  allow_implicit_invocation: false

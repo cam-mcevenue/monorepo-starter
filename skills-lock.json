@@ -1,19 +1,418 @@
 {
   "version": 2,
   "skills": {
-    "code-conventions": {
+    "ai-docs-setup": {
       "source": "cam-mcevenue/skills",
-      "commit": "f3ca4c0be392d929e1de1c9ba71f76030ad704fa",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
       "sourceType": "github",
-      "skillPath": "skills/cam-mcevenue/code-conventions/SKILL.md",
-      "computedHash": "c11adcd8a836b98443a605fe693e12c1ad5a52ac6213a73720edf278f4357d03"
+      "skillPath": "skills/core/ai-docs-setup/SKILL.md",
+      "computedHash": "986c41ac8521ea6da8bc4b610eb1a843af21e89a6642e741b34647ae924b7393"
     },
-    "effect": {
+    "architect": {
       "source": "cam-mcevenue/skills",
-      "commit": "f3ca4c0be392d929e1de1c9ba71f76030ad704fa",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
       "sourceType": "github",
-      "skillPath": "skills/kitlangton/effect/SKILL.md",
-      "computedHash": "050d6f6653dcef088ad0f350e6c91bf276050efb2ba1c4ea6b9c6f98fd8849b8"
+      "skillPath": "skills/engineering/architect/SKILL.md",
+      "computedHash": "682314bcc029df48bfc04f1a949156c2934d6d86fc0193a772c0d2b50bf0518e"
+    },
+    "code-review": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/code-review/SKILL.md",
+      "computedHash": "4adcc25d4d4f82de3adf1c2aee1f8e4f541fadf605b6455181c4ff52ea545010"
+    },
+    "core-skills": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/core-skills/SKILL.md",
+      "computedHash": "7ebc388500416cfa55701a062b17a01a8f35c6fc28f6a9fce683ba9b0b6ff378"
+    },
+    "correct": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/correct/SKILL.md",
+      "computedHash": "8e6d3d59b8a0fb666332ca9f302bbe5191e1e453a49d9a27ba9cf3a2e62b48a4"
+    },
+    "diagnosing-bugs": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
+      "computedHash": "a22e7bcdb80dd9d62ccafaa441fc17c0d19ef209456945b84e96a118339500d0"
+    },
+    "domain-create": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/domain-create/SKILL.md",
+      "computedHash": "5c3a02598e4c0438500aaf4204a6dceea783668b7139232f9ef0b220626b1901"
+    },
+    "domain-modeling": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/domain-modeling/SKILL.md",
+      "computedHash": "15c1c094396935943d9b286936e1e8fa3fd1b6c693511355db52cf6df9ca86fa"
+    },
+    "grill-me": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/grill-me/SKILL.md",
+      "computedHash": "7c8de1af11f801dccb70052b964daf80051426a4a7a1d5e511ce221fb05a21ec"
+    },
+    "grill-with-docs": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/grill-with-docs/SKILL.md",
+      "computedHash": "601578d4423c6f8b308a93ea3cbef3221743ac7b288b9b7bae8c225b95cbbdd7"
+    },
+    "handoff": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/handoff/SKILL.md",
+      "computedHash": "a4880bf34416546b43c07359e95d5f0b5959a8d77cc50fe70f566609d3147b5f"
+    },
+    "how": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/how/SKILL.md",
+      "computedHash": "59cb4a0e473b97c534b1acbe7074c88ca52267b006ced868109330301e06ae6e"
+    },
+    "implement": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/implement/SKILL.md",
+      "computedHash": "4ea7f6e35e73126a771567b39dea367bc72ea900870b5e9d414c8aeda1f6d328"
+    },
+    "implement-spec": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/implement-spec/SKILL.md",
+      "computedHash": "f6ac0a3b29672f36125de95fc9be25713d1a65311d749991f2610a656073fd87"
+    },
+    "improve-codebase-architecture": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
+      "computedHash": "de7678ea6bec80c7bafb0ba9e59eef9b8e08a0bbbef1ea47f815cf47d5ad140f"
+    },
+    "learn": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/learn/SKILL.md",
+      "computedHash": "6b29e223406899c20dcdc9dfb1d6160ca6dcc0b4b6c46b81a4d292ae6b0366a1"
+    },
+    "mode-engineering": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/mode-engineering/SKILL.md",
+      "computedHash": "be325989227c6f1fba83f6cc3fb393bdae5b61e83e905dda1aea13c188483bf8"
+    },
+    "mode-engineering-help": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/mode-engineering-help/SKILL.md",
+      "computedHash": "fd00f4d32ed130f4b568019012770c09549113ee14317c61798669d32c87a113"
+    },
+    "pr": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/pr/SKILL.md",
+      "computedHash": "2085b6661d73c7e5c94d27dba0022cd83f46a7e9137f66c52d20f2f31af10888"
+    },
+    "principle-attack-the-premise": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/principle-attack-the-premise/SKILL.md",
+      "computedHash": "72db82eb92680483392cf5d723a5242111c2d52d6f71bc4fb3a4d98c263d8558"
+    },
+    "principle-boundary-discipline": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-boundary-discipline/SKILL.md",
+      "computedHash": "a4895240ea29a54fb9085eb5ea8da3d074a71cb90bb990dd23612689b2f994d1"
+    },
+    "principle-build-the-lever": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/principle-build-the-lever/SKILL.md",
+      "computedHash": "b475a714adfa18f45396a13c22704b423f823907077b687b8273c3adb4cbdb3d"
+    },
+    "principle-encode-lessons-in-structure": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/principle-encode-lessons-in-structure/SKILL.md",
+      "computedHash": "58527988071a60175a8a17ef4476ea6acf448fb74c27e5bd84efee394b57a580"
+    },
+    "principle-exhaust-the-design-space": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-exhaust-the-design-space/SKILL.md",
+      "computedHash": "04dd084baeb75fea41db70ea8678da9a8a7afb72de8f465b02d474c8d3895635"
+    },
+    "principle-experience-first": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-experience-first/SKILL.md",
+      "computedHash": "fa4685ee70368b717e51b7886b58a77acdea715d33b996cd91f891a7ed44f1a5"
+    },
+    "principle-explain-the-number": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/principle-explain-the-number/SKILL.md",
+      "computedHash": "122e706e05a375dbef0570457f5d363b73294ffaff367d3b91dcd76624b4d159"
+    },
+    "principle-fix-root-causes": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-fix-root-causes/SKILL.md",
+      "computedHash": "3086f1e6a09cffcd6c5c88fdb980676e0d1708d3ef8abb3ac456b072701b54cd"
+    },
+    "principle-foundational-thinking": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-foundational-thinking/SKILL.md",
+      "computedHash": "374efbc428db7016e719ae16b1ab188926addaa5834f7fa71bee8a5cfb481009"
+    },
+    "principle-guard-the-context-window": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/principle-guard-the-context-window/SKILL.md",
+      "computedHash": "10a1e4fa27a27bd16dfaceea0f871fabba3de1a3efdcb8a18377fb40ef7ee97b"
+    },
+    "principle-laziness-protocol": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-laziness-protocol/SKILL.md",
+      "computedHash": "a8dac7eeb5dc77b02e8fbdd917aa6c2ec2fc8c6417ed4d7c08b96e0c4412e5ef"
+    },
+    "principle-make-operations-idempotent": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-make-operations-idempotent/SKILL.md",
+      "computedHash": "87a926869b11e635a60292c13dea38262ce0ba5ebfad353a388e9f05d86d042f"
+    },
+    "principle-migrate-callers-then-delete-legacy-apis": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-migrate-callers-then-delete-legacy-apis/SKILL.md",
+      "computedHash": "ae67f4393ba64e66f3183aeb31d81ea2eae1d5274b0802ea6643892a29d6d597"
+    },
+    "principle-minimize-reader-load": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-minimize-reader-load/SKILL.md",
+      "computedHash": "19fb2edc88396417adc197de4f40929eacbeb7751a467314a19b03218d22344b"
+    },
+    "principle-model-the-domain": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-model-the-domain/SKILL.md",
+      "computedHash": "67bc0aaba2782575fdca8d4a026a331e076f356ef7be711f303b0db20677cb11"
+    },
+    "principle-outcome-oriented-execution": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-outcome-oriented-execution/SKILL.md",
+      "computedHash": "1996c2c8fcb28b0bc7dab49ecdecf62059860aed3e1ac49020b7c2e2c111be7f"
+    },
+    "principle-prove-it-works": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/principle-prove-it-works/SKILL.md",
+      "computedHash": "4486e80ee35ffc6734aedef0ff1420bd507f507a90e5c3cc5f66156af7a819b9"
+    },
+    "principle-redesign-from-first-principles": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-redesign-from-first-principles/SKILL.md",
+      "computedHash": "caba5098f4f5e69285a1fddd2f31ab83f7c631022e23adb92209009eef783b47"
+    },
+    "principle-separate-before-serializing-shared-state": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-separate-before-serializing-shared-state/SKILL.md",
+      "computedHash": "040c81f9da426bb1724492e9a25e6fb6621594a32e178adeeae140630f07674d"
+    },
+    "principle-sequence-verifiable-units": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/principle-sequence-verifiable-units/SKILL.md",
+      "computedHash": "667dee91f8725f2e2ccbd4e96b96d1e808ae9a662c61e919922d8f6f8f76c33d"
+    },
+    "principle-subtract-before-you-add": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-subtract-before-you-add/SKILL.md",
+      "computedHash": "e690844e6043c5d4b36b559f0e77fed36cf27fca6137e045b00808206edcd2cb"
+    },
+    "principle-test-behavior-not-implementation": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-test-behavior-not-implementation/SKILL.md",
+      "computedHash": "d2e10da69517122a885dd8f989b690605228345e7b3dd220464e1f3379ae29f4"
+    },
+    "principle-type-system-discipline": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/principle-type-system-discipline/SKILL.md",
+      "computedHash": "777a0d427f3b8486ed4389d314c9ae1215efb7ad91a7272ec0727c6c2511992a"
+    },
+    "prototype": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/prototype/SKILL.md",
+      "computedHash": "61fa91e5aa590ec02f64c6ec01fe4f8fcca3026dc7dfe91dab0a747e20f05571"
+    },
+    "research": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/research/SKILL.md",
+      "computedHash": "28a24106a6aa7b6fda4cc77f3f057bc64581363a42ec14256a8e8ece07dfc655"
+    },
+    "retro": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/retro/SKILL.md",
+      "computedHash": "87995bdf4fe44cf5411c65980dc0efbfa8ee25eda441a8e56a0e1a0371ed0bdc"
+    },
+    "tdd": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/tdd/SKILL.md",
+      "computedHash": "de67b74951a757488eaedead5549377cb57ddbdb885a3ee35b6e1692f2e4dc3e"
+    },
+    "teach": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/teach/SKILL.md",
+      "computedHash": "7469d2cc142020ce7c342dee2d257e47be558468e54e1f634cb30e66b9bbdf9f"
+    },
+    "to-questionnaire": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/to-questionnaire/SKILL.md",
+      "computedHash": "920f38fc91eb6c849774dec1848d11b95b8aba4202c6ceedacf914a0af750d65"
+    },
+    "to-spec": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/to-spec/SKILL.md",
+      "computedHash": "19eb4616199609df5bc17f3e35a039dc0d2a8ec2d500569e91184a793508d843"
+    },
+    "to-tickets": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/to-tickets/SKILL.md",
+      "computedHash": "a9c3ae20a14416ecb4a6539d5ab87b14d1e5770cbd9ee65cf10fd6afe3d3727a"
+    },
+    "triage": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/triage/SKILL.md",
+      "computedHash": "41d94eb60c66cc1dd5176b3e0a9a489ada43310e99a8594702d579f68a927d40"
+    },
+    "typescript": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/stack-typescript/typescript/SKILL.md",
+      "computedHash": "51c692d2bfe2007c732f1960c9d1f4dafe095f6264e98ac036b5393be1b04842"
+    },
+    "typescript-effect": {
+      "source": "cam-mcevenue/skills",
+      "commit": "ac0399813dccd7bca2d44dfa44a4cfb16b5b1e2e",
+      "sourceType": "github",
+      "skillPath": "skills/stack-typescript/typescript-effect/SKILL.md",
+      "computedHash": "d7855483fcf74a2de1bf2b435c562fbdd790f4d240889bbdd755f6f1ae248cc8"
+    },
+    "unslop": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/unslop/SKILL.md",
+      "computedHash": "bff1fc5dd9359c390b11ccacdc0b089b19f0ace2690a4a54ea0ae0c7f934f503"
+    },
+    "use-issue-tracker": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/use-issue-tracker/SKILL.md",
+      "computedHash": "80f1fc90ecf0cfb5a71e2681def5bfd6d15b9bfc8889ea8e00a70457ffbbf5ae"
+    },
+    "wait-what": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/wait-what/SKILL.md",
+      "computedHash": "aae074b0419d680c8d07b22276efe75a11c8f2d5cff7093ef6c9f723830b080b"
+    },
+    "wayfinder": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/wayfinder/SKILL.md",
+      "computedHash": "78e775000bcba0d6b45dc8c6385f500649e21dc410ac8e74f39aea1a7bba7cd4"
+    },
+    "why": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/why/SKILL.md",
+      "computedHash": "6f716f9a4be4d0d02d74cac1fc6bb16fa91a7f7155c6653d856356e3f49a3395"
+    },
+    "writing-for-agents": {
+      "source": "cam-mcevenue/skills",
+      "commit": "9310c36ee6afc11ccc8299682904300522071988",
+      "sourceType": "github",
+      "skillPath": "skills/core/writing-for-agents/SKILL.md",
+      "computedHash": "e313300865794bff87c84d3a07bd47ea0ebf57a0232db075e1a88f3bd401b819"
     }
   }
 }

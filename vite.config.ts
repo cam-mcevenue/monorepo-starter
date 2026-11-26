@@ -21,7 +21,9 @@ export default defineConfig({
       // Interactive tasks must not be cached: the task runner captures output
       // instead of attaching a TTY, so prompts print and then exit immediately.
       cli: { command: "vpx packages/cli/src/bin.ts", cache: false },
-      skills: { command: "DISABLE_TELEMETRY=1 vpx skills@latest", cache: false },
+      // Vendored skills from cam-mcevenue/skills, tracked in skills-lock.json.
+      // Edit a skill upstream and pull it in: an update overwrites local edits.
+      skills: { command: "DISABLE_TELEMETRY=1 vpx skills@1.9.0", cache: false },
     },
   },
 });
